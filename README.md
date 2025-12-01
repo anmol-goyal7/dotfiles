@@ -1,34 +1,52 @@
-# 🚫 The Trackpadless Arch Setup
+# 🚀 The Trackpadless Arch Linux Journey
 
-**Author:** Anmol Goyal  
-**Goal:** Complete elimination of the trackpad/mouse from the workflow.  
-**OS:** Arch Linux (Hyprland)
+> **"Moving from spatial navigation to command navigation."**
 
-## 🎯 Philosophy
-The goal is to move from "Spatial Navigation" (moving a cursor) to "Command Navigation" (filtering for destinations). This setup uses a combination of Vim motions, tiling window management, and a custom "Sniper Mode" for mouse emulation.
+This repository hosts my personal configuration files (dotfiles) for **Arch Linux**, running the **Hyprland** compositor.
 
-## 🛠️ Key Components
-* **WM:** Hyprland (JaKooLit Rice)
-* **Shell:** Zsh + Kitty
-* **Browser:** Firefox + Vimium C
-* **Mouse Emulation:** `ydotool` + Custom Hyprland Submap
+The core philosophy of this setup is to completely eliminate the need for a physical trackpad or mouse. I am transitioning to a workflow where every action—from window management to cursor precision—is handled exclusively via the keyboard.
 
-## ⌨️ "Sniper Mode" (Mouse Replacement)
-**Activation:** `Super + G`  
-**Exit:** `Escape`
+## 💻 System Configuration
+* **OS:** Arch Linux
+* **Window Manager:** Hyprland (Customized JaKooLit Rice)
+* **Terminal:** Kitty
+* **Shell:** Zsh
+* **Editor:** Neovim
+* **Browser Navigation:** Vimium C
+* **Hardware:** Laptop (Trackpad Disabled)
 
-| Action | Keybind | Description |
+## 🎯 The "Sniper Mode" (Mouse Replacement)
+To achieve true trackpadless usage without losing functionality, I implemented a custom **Hyprland Submap** called *Sniper Mode*. This uses `ydotool` to emulate mouse input only when absolutely necessary.
+
+**Activation:** Press `Super + G` to enter Mouse Mode.
+**Exit:** Press `Escape` to return to normal mode.
+
+| Action | Key | Description |
 | :--- | :--- | :--- |
-| **Move Left** | `h` | Fast movement (100px) |
-| **Move Down** | `j` | Fast movement (100px) |
-| **Move Up** | `k` | Fast movement (100px) |
-| **Move Right** | `l` | Fast movement (100px) |
-| **Precision** | `Shift + h/j/k/l` | Slow movement (10px) |
-| **Left Click** | `Space` | Primary Click |
-| **Right Click** | `s` | Context Menu |
+| **Move Left** | `h` | Fast cursor travel (100px) |
+| **Move Down** | `j` | Fast cursor travel (100px) |
+| **Move Up** | `k` | Fast cursor travel (100px) |
+| **Move Right** | `l` | Fast cursor travel (100px) |
+| **Precision** | `Shift + h/j/k/l` | Slow, pixel-perfect movement (10px) |
+| **Left Click** | `Space` | Standard left click |
+| **Right Click** | `s` | Context menu (Right click) |
 | **Scroll** | `u` / `d` | Scroll Up / Down |
 
-## 📂 Installation
-1. Install `ydotool` and ensure the user is in the `input` group.
-2. Copy the `scripts` folder to `~/.config/hypr/`.
-3. Add the keybinds from `UserConfigs/UserKeybinds.conf`.
+## 🛠️ Installation & Requirements
+These dotfiles rely on the following tools to function correctly:
+
+1. **Dependencies:**
+   Ensure `ydotool` is installed for mouse emulation and your user is in the input group:
+   ```bash
+   yay -S ydotool
+   sudo usermod -aG input $USER
+   ```
+
+2. **Script Setup:**
+   The mouse logic is located in `hypr/scripts/move_mouse.sh`. Ensure it is executable:
+   ```bash
+   chmod +x ~/.config/hypr/scripts/move_mouse.sh
+   ```
+
+---
+*Maintained by Anmol Goyal (anmol-goyal7)*
