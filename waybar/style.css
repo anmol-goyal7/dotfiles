@@ -1,0 +1,165 @@
+/* =================================================================
+   WAYBAR — Tokyo Night OLED
+   Pure black background, minimal, battery-friendly
+   ================================================================= */
+
+* {
+  font-family: "FantasqueSansM Nerd Font Mono", "Material Symbols Rounded", sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  min-height: 0;
+}
+
+window#waybar {
+  background: rgba(0, 0, 0, 0.95);
+  color: #a9b1d6;
+  border-bottom: 1px solid #15161e;
+}
+
+tooltip {
+  background: #0a0a0f;
+  border: 1px solid #1a1b26;
+  border-radius: 8px;
+  color: #a9b1d6;
+}
+
+/* ---- Left: Workspaces ---- */
+
+#workspaces {
+  margin: 4px 8px;
+}
+
+#workspaces button {
+  color: #565f89;
+  background: transparent;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border-radius: 6px;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+#workspaces button:hover {
+  background: #1a1b26;
+  color: #c0caf5;
+}
+
+#workspaces button.active {
+  background: #7aa2f7;
+  color: #000000;
+}
+
+#workspaces button.urgent {
+  background: #f7768e;
+  color: #000000;
+}
+
+/* ---- Center: Clock ---- */
+
+#clock {
+  color: #c0caf5;
+  padding: 0 12px;
+}
+
+/* ---- Right: Modules ---- */
+
+#pulseaudio,
+#backlight,
+#battery,
+#network,
+#bluetooth,
+#tray,
+#custom-power {
+  padding: 0 10px;
+  margin: 4px 2px;
+  border-radius: 6px;
+  background: transparent;
+  color: #a9b1d6;
+  transition: all 0.2s ease;
+}
+
+#pulseaudio:hover,
+#backlight:hover,
+#battery:hover,
+#network:hover,
+#bluetooth:hover,
+#custom-power:hover {
+  background: #1a1b26;
+  color: #c0caf5;
+}
+
+/* Volume */
+#pulseaudio {
+  color: #7aa2f7;
+}
+
+#pulseaudio.muted {
+  color: #565f89;
+}
+
+/* Backlight */
+#backlight {
+  color: #e0af68;
+}
+
+/* Battery states */
+#battery {
+  color: #9ece6a;
+}
+
+#battery.charging {
+  color: #73daca;
+}
+
+#battery.warning:not(.charging) {
+  color: #e0af68;
+}
+
+#battery.critical:not(.charging) {
+  color: #f7768e;
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    color: #000000;
+  }
+}
+
+/* Network */
+#network {
+  color: #7dcfff;
+}
+
+#network.disconnected {
+  color: #565f89;
+}
+
+/* Bluetooth */
+#bluetooth {
+  color: #bb9af7;
+}
+
+#bluetooth.disabled,
+#bluetooth.off {
+  color: #565f89;
+}
+
+/* Power */
+#custom-power {
+  color: #f7768e;
+  margin-right: 8px;
+}
+
+/* Tray */
+#tray {
+  margin-right: 4px;
+}
+
+#tray > .passive {
+  -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+  -gtk-icon-effect: highlight;
+}

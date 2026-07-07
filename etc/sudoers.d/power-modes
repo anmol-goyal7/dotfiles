@@ -1,0 +1,31 @@
+# =============================================================================
+# SUDOERS — passwordless power management for anmol
+# Install: sudo cp ~/repos/dotfiles/etc/sudoers.d/power-modes /etc/sudoers.d/power-modes
+#          sudo chmod 440 /etc/sudoers.d/power-modes
+# =============================================================================
+
+# CPU governor via cpupower
+anmol ALL=(ALL) NOPASSWD: /usr/bin/cpupower frequency-set *
+
+# Intel P-State tuning
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/intel_pstate/max_perf_pct
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/intel_pstate/min_perf_pct
+
+# TLP power profiles
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tlp bat
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tlp ac
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tlp start
+anmol ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart tlp
+anmol ALL=(ALL) NOPASSWD: /usr/bin/systemctl start tlp
+anmol ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop tlp
+
+# WiFi power management
+anmol ALL=(ALL) NOPASSWD: /usr/bin/iw dev wlp0s20f3 set power_save on
+anmol ALL=(ALL) NOPASSWD: /usr/bin/iw dev wlp0s20f3 set power_save off
+
+# Audio power save
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/module/snd_hda_intel/parameters/power_save
+
+# NMI watchdog
+anmol ALL=(ALL) NOPASSWD: /usr/bin/tee /proc/sys/kernel/nmi_watchdog

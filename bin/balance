@@ -1,0 +1,75 @@
+#!/bin/bash
+# =============================================================================
+# BALANCED MODE — Adaptive performance, sensible defaults
+# TLP manages the CPU automatically based on load.
+# Usage: balance
+# =============================================================================
+
+WIFI="wlp0s20f3"
+MODE_FILE="/tmp/.power-mode"
+
+step() { echo "  → $1"; }
+
+echo "⚖️  Applying Balanced Mode..."
+
+# --- 1. CPU Governor: powersave (intel_pstate scales adaptively in this mode) ---
+step "CPU governor: powersave (adaptive)"
+sudo cpupower frequency-set -g powersave >/dev/null 2>&1 || true
+
+# --- 2. Intel P-State: turbo ON, cap at 80% max perf ---
+# Turbo is available but the 80% cap prevents sustained max frequency
+step "CPU turbo: ON | max perf: 80%"
+echo 0  | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo     >/dev/null 2>&1 || true
+echo 80 | sudo tee /sys/devices/system/cpu/intel_pstate/max_perf_pct >/dev/null 2>&1 || true
+echo 15 | sudo tee /sys/devices/system/cpu/intel_pstate/min_perf_pct >/dev/null 2>&1 || true
+
+# --- 3. Let TLP re-apply its automatic profile ---
+step "TLP: auto (restart service)"
+sudo systemctl restart tlp >/dev/null 2>&1 || sudo tlp start >/dev/null 2>&1 || true
+
+# --- 4. Audio power save on (low latency is fine) ---
+step "Audio: power save ON"
+echo 1 | sudo tee /sys/module/snd_hda_intel/parameters/power_save >/dev/null 2>&1 || true
+
+# --- 5. Screen brightness: 55% ---
+step "Screen brightness: 55%"
+brightnessctl set 55% >/dev/null 2>&1 || true
+
+# --- 6. WiFi power save: ON (light) ---
+step "WiFi power save: ON"
+sudo iw dev "$WIFI" set power_save on 2>/dev/null || true
+
+# --- 7. Bluetooth: ON ---
+step "Bluetooth: ON"
+bluetoothctl power on >/dev/null 2>&1 || true
+
+# --- 8. Hyprland: animations ON, blur ON ---
+step "Hyprland: animations ON, blur ON"
+hyprctl keyword animations:enabled 1              >/dev/null 2>&1 || true
+hyprctl keyword decoration:blur:enabled 1          >/dev/null 2>&1 || true
+hyprctl keyword decoration:drop_shadow true         >/dev/null 2>&1 || true
+
+# --- 9. NMI watchdog default ---
+step "NMI watchdog: ON"
+echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog >/dev/null 2>&1 || true
+
+# --- 10. Mark current mode ---
+echo "balance" > "$MODE_FILE"
+
+# --- Done ---
+TURBO_STATE=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null)
+MAX_PERF=$(cat /sys/devices/system/cpu/intel_pstate/max_perf_pct 2>/dev/null)
+CURRENT_GOV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null)
+CURRENT_BRIGHT=$(brightnessctl get 2>/dev/null)
+
+echo ""
+echo "✓ Balanced Mode ACTIVE"
+echo "  CPU governor  : $CURRENT_GOV (adaptive)"
+echo "  Turbo         : $([ "$TURBO_STATE" = "0" ] && echo "ON (boosting allowed)" || echo "OFF")"
+echo "  Max perf      : ${MAX_PERF}%"
+echo "  Brightness    : $CURRENT_BRIGHT / 400"
+
+notify-send -u low -t 4000 \
+  "⚖️  Balanced Mode" \
+  "CPU: adaptive @ ${MAX_PERF}% cap\nTurbo: ON (bursts) | Screen: 55%\nWiFi: low power | BT: on\nAnimations: on" \
+  2>/dev/null || true

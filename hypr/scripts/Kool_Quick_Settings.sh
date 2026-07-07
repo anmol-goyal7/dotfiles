@@ -49,7 +49,7 @@ EOF
 
 # Main function to handle menu selection
 main() {
-    choice=$(menu | rofi -i -dmenu -config $rofi_theme -mesg "$msg")
+    choice=$(menu | rofi -i -dmenu -config "$rofi_theme" -mesg "$msg")
     
     # Map choices to corresponding files
     case "$choice" in
@@ -105,7 +105,7 @@ main() {
 
     # Open the selected file in the terminal with the text editor
     if [ -n "$file" ]; then
-        $term -e $edit "$file"
+        "$term" -e "$edit" "$file"
     fi
 }
 

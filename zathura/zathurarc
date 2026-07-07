@@ -1,0 +1,82 @@
+# =============================================================================
+# ZATHURA CONFIG — VIM-STYLE PDF VIEWER
+# Symlink: ln -sf ~/repos/dotfiles/zathura ~/.config/zathura
+# =============================================================================
+
+# --- Appearance ---
+set font "FantasqueSansM Nerd Font Mono Bold 12"
+set recolor true
+set recolor-keephue true
+
+# Catppuccin Mocha colors
+set default-bg            "#1e1e2e"
+set default-fg            "#cdd6f4"
+set statusbar-bg          "#181825"
+set statusbar-fg          "#cdd6f4"
+set inputbar-bg           "#313244"
+set inputbar-fg           "#cdd6f4"
+set notification-bg       "#313244"
+set notification-fg       "#cdd6f4"
+set notification-error-bg "#f38ba8"
+set notification-error-fg "#1e1e2e"
+set notification-warning-bg "#fab387"
+set notification-warning-fg "#1e1e2e"
+set highlight-color       "#f5c2e7"
+set highlight-active-color "#cba6f7"
+set completion-bg         "#313244"
+set completion-fg         "#cdd6f4"
+set completion-highlight-bg "#89b4fa"
+set completion-highlight-fg "#1e1e2e"
+set recolor-lightcolor    "#1e1e2e"
+set recolor-darkcolor     "#cdd6f4"
+
+# --- Behavior ---
+set selection-clipboard clipboard
+set scroll-page-aware true
+set smooth-scroll true
+set scroll-full-overlap 0.1
+set zoom-min 10
+set zoom-max 1000
+set adjust-open width
+
+# --- Keybindings (vim-style, most are default) ---
+
+# Scroll
+map <C-d> scroll half-down
+map <C-u> scroll half-up
+map <C-f> scroll full-down
+map <C-b> scroll full-up
+map J     scroll half-down
+map K     scroll half-up
+
+# Zoom
+map +     zoom in
+map =     zoom in
+map -     zoom out
+map 0     zoom reset
+
+# Fit modes
+map W     adjust_window best-fit
+map H     adjust_window width
+map P     adjust_window page
+
+# Rotation
+map r     rotate rotate-cw
+map R     rotate rotate-ccw
+
+# Navigation
+map gg    goto top
+map G     goto bottom
+map <Tab> toggle_index
+
+# Follow links
+map f     follow
+
+# Search (default / and ? already work)
+
+# Recolor (toggle dark mode)
+map <C-r> recolor
+
+# Quit
+map q     quit
+map ZZ    quit

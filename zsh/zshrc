@@ -1,0 +1,208 @@
+# =============================================================================
+# ZSH CONFIG — VIM MODE + KEYBOARD-FIRST WORKFLOW
+# Symlink: ln -sf ~/repos/dotfiles/zsh/zshrc ~/.zshrc
+# =============================================================================
+
+# PATH — dotfiles bin (saver, performance, balance, powermode, etc.)
+export PATH="$HOME/repos/dotfiles/bin:$PATH"
+
+# --- Vim Mode ---
+bindkey -v
+export KEYTIMEOUT=1
+
+# Fix backspace crossing insert/normal boundary
+bindkey -v '^?' backward-delete-char
+bindkey -v '^H' backward-delete-char
+
+# History navigation in insert mode
+bindkey -v '^P' up-history
+bindkey -v '^N' down-history
+
+# Ctrl+A / Ctrl+E in insert mode
+bindkey -v '^A' beginning-of-line
+bindkey -v '^E' end-of-line
+
+# Search in normal mode
+bindkey -M vicmd '/' history-incremental-search-backward
+bindkey -M vicmd '?' history-incremental-search-forward
+
+# Cursor shape: beam in insert, block in normal
+function zle-keymap-select {
+  if [[ $KEYMAP == vicmd ]] || [[ $1 == 'block' ]]; then
+    echo -ne '\e[1 q'   # block cursor
+  else
+    echo -ne '\e[5 q'   # beam cursor
+  fi
+}
+zle -N zle-keymap-select
+
+function zle-line-init {
+  zle -K viins
+  echo -ne '\e[5 q'
+}
+zle -N zle-line-init
+echo -ne '\e[5 q'
+preexec() { echo -ne '\e[5 q'; }
+
+# =============================================================================
+# FZF
+# =============================================================================
+[ -f /usr/share/fzf/key-bindings.zsh ] && source /usr/share/fzf/key-bindings.zsh
+[ -f /usr/share/fzf/completion.zsh ]   && source /usr/share/fzf/completion.zsh
+
+export FZF_DEFAULT_OPTS="
+  --layout=reverse
+  --border=rounded
+  --prompt='❯ '
+  --pointer='▶'
+  --marker='✓'
+  --color=bg+:#313244,bg:#1e1e2e,spinner:#f5e0dc,hl:#f38ba8
+  --color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc
+  --color=marker:#f5e0dc,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8
+"
+
+# Use fd if available (faster)
+if command -v fd &>/dev/null; then
+  export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+  export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+  export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+fi
+
+# Ctrl+F: fuzzy cd into a directory
+fzf-cd() {
+  local dir
+  dir=$(fd --type d --hidden --follow --exclude .git 2>/dev/null \
+        | fzf --preview 'ls -la {}') && cd "$dir"
+  zle reset-prompt
+}
+zle -N fzf-cd
+bindkey '^F' fzf-cd
+
+# =============================================================================
+# COMPLETION (vim-style menu navigation)
+# =============================================================================
+# complist must be loaded before compinit to make the menuselect keymap available
+zmodload zsh/complist
+autoload -Uz compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+
+# Navigate completion menu with hjkl
+bindkey -M menuselect 'h' vi-backward-char
+bindkey -M menuselect 'l' vi-forward-char
+bindkey -M menuselect 'k' vi-up-line-or-history
+bindkey -M menuselect 'j' vi-down-line-or-history
+bindkey -M menuselect '^[' send-break  # Esc to cancel
+
+# =============================================================================
+# HISTORY
+# =============================================================================
+HISTSIZE=10000
+SAVEHIST=10000
+HISTFILE=~/.zsh_history
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_FIND_NO_DUPS
+setopt HIST_IGNORE_SPACE
+setopt SHARE_HISTORY
+setopt APPEND_HISTORY
+
+# =============================================================================
+# ALIASES
+# =============================================================================
+
+# Editor
+alias v='nvim'
+alias vi='nvim'
+alias vim='nvim'
+
+# Tools
+alias lg='lazygit'
+alias y='yy'          # yazi with auto-cd on exit
+alias t='tmux'
+alias ta='tmux attach 2>/dev/null || tmux new'
+alias tl='tmux ls'
+
+# ls
+alias ls='ls --color=auto'
+alias ll='ls -la'
+alias la='ls -A'
+alias l='ls -CF'
+alias tree='tree -C'
+
+# Navigation
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Git (for quick stuff, use lazygit for everything else)
+alias gs='git status'
+alias ga='git add'
+alias gc='git commit'
+alias gp='git push'
+alias gpl='git pull'
+alias gd='git diff'
+alias glog='git log --oneline --graph --all'
+
+# Clipboard (Wayland)
+alias copy='wl-copy'
+alias paste='wl-paste'
+
+# System
+alias update='sudo pacman -Syu'
+alias install='sudo pacman -S'
+alias remove='sudo pacman -Rs'
+alias search='pacman -Ss'
+
+# Taskwarrior
+today() {
+  task due:today list
+}
+
+# Config shortcuts
+alias zshrc='nvim ~/.zshrc'
+alias nvimrc='nvim ~/.config/nvim/init.lua'
+alias hyprrc='nvim ~/.config/hypr/UserConfigs/UserKeybinds.conf'
+alias tmuxrc='nvim ~/.tmux.conf'
+
+# =============================================================================
+# YAZI — wrapper that cd's into the directory you exit from
+# =============================================================================
+function yy() {
+  local tmp cwd
+  tmp="$(mktemp -t "yazi-cwd.XXXXX")"
+  yazi "$@" --cwd-file="$tmp"
+  if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+    cd -- "$cwd"
+  fi
+  rm -f -- "$tmp"
+}
+export PATH="$HOME/.local/bin:$PATH"
+
+# =============================================================================
+# PROMPT — show current directory
+# =============================================================================
+autoload -Uz colors && colors
+PROMPT='%F{blue}%~%f %F{cyan}❯%f '
+
+# Set terminal window/tab title to current directory
+precmd() { print -Pn "\e]0;%~\a"; }
+
+# --- Screen Red Tint (100% red, blocks all blue/green light) ---
+alias red='hyprctl keyword decoration:screen_shader ~/.config/hypr/shaders/red-tint.glsl'
+alias blue='hyprctl keyword decoration:screen_shader ""'
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+# =============================================================================
+# PLUGINS — autosuggestions + zoxide + syntax highlighting
+# =============================================================================
+[ -f /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+  source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#565f89'
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+
+command -v zoxide >/dev/null && eval "$(zoxide init zsh)"  # z <dir> / zi (fuzzy)
+
+# must stay last
+[ -f /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && \
+  source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

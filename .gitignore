@@ -1,0 +1,10 @@
+# local tool state
+.claude/
+
+# editor/installer backups
+*.bak
+*.bak.*
+*.backup
+
+# runtime state files
+.initial_startup_done
