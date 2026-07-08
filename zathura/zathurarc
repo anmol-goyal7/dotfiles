@@ -8,32 +8,32 @@ set font "FantasqueSansM Nerd Font Mono Bold 12"
 set recolor true
 set recolor-keephue true
 
-# Catppuccin Mocha colors
-set default-bg            "#1e1e2e"
-set default-fg            "#cdd6f4"
-set statusbar-bg          "#181825"
-set statusbar-fg          "#cdd6f4"
-set inputbar-bg           "#313244"
-set inputbar-fg           "#cdd6f4"
-set notification-bg       "#313244"
-set notification-fg       "#cdd6f4"
-set notification-error-bg "#f38ba8"
-set notification-error-fg "#1e1e2e"
-set notification-warning-bg "#fab387"
-set notification-warning-fg "#1e1e2e"
-set highlight-color       "#f5c2e7"
-set highlight-active-color "#cba6f7"
-set completion-bg         "#313244"
-set completion-fg         "#cdd6f4"
-set completion-highlight-bg "#89b4fa"
-set completion-highlight-fg "#1e1e2e"
-set recolor-lightcolor    "#1e1e2e"
-set recolor-darkcolor     "#cdd6f4"
+# Tokyo Night OLED colors (matches waybar/rofi/swaync — pure-black bg)
+set default-bg            "#000000"
+set default-fg            "#c0caf5"
+set statusbar-bg          "#1a1b26"
+set statusbar-fg          "#c0caf5"
+set inputbar-bg           "#1a1b26"
+set inputbar-fg           "#c0caf5"
+set notification-bg       "#1a1b26"
+set notification-fg       "#c0caf5"
+set notification-error-bg "#f7768e"
+set notification-error-fg "#000000"
+set notification-warning-bg "#e0af68"
+set notification-warning-fg "#000000"
+set highlight-color       "#7aa2f7"
+set highlight-active-color "#bb9af7"
+set completion-bg         "#1a1b26"
+set completion-fg         "#c0caf5"
+set completion-highlight-bg "#7aa2f7"
+set completion-highlight-fg "#000000"
+# Dark reading mode: page bg -> OLED black, text -> soft blue-white
+set recolor-lightcolor    "#000000"
+set recolor-darkcolor     "#c0caf5"
 
 # --- Behavior ---
 set selection-clipboard clipboard
 set scroll-page-aware true
-set smooth-scroll true
 set scroll-full-overlap 0.1
 set zoom-min 10
 set zoom-max 1000

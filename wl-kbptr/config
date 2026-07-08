@@ -1,0 +1,34 @@
+# wl-kbptr — keyboard-driven mouse pointer (Tokyo Night OLED)
+# Flow: label grid (type letters to pick a cell) -> bisect (refine to a
+# point) -> pointer warps there. Bound in hypr to warp + left-click.
+# home-row-first label order so the common targets are on asdfghjkl.
+
+[general]
+home_row_keys=
+modes=tile,bisect
+# return non-zero on cancel (Escape) so a chained click won't fire
+cancellation_status_code=1
+
+[mode_tile]
+label_color=#c0caf5ff
+label_select_color=#7aa2f7ff
+unselectable_bg_color=#000000aa
+selectable_bg_color=#7aa2f733
+selectable_border_color=#7aa2f7cc
+label_font_family=FantasqueSansM Nerd Font
+label_font_size=8 50% 100
+label_symbols=asdfghjklqwertyuiopzxcvbnm
+
+[mode_bisect]
+label_color=#c0caf5ff
+label_font_size=20
+label_font_family=FantasqueSansM Nerd Font
+label_padding=12
+pointer_size=20
+pointer_color=#f7768eff
+unselectable_bg_color=#000000aa
+even_area_bg_color=#7aa2f733
+even_area_border_color=#7aa2f766
+odd_area_bg_color=#bb9af733
+odd_area_border_color=#bb9af766
+history_border_color=#414868cc

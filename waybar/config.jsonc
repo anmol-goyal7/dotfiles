@@ -92,8 +92,8 @@
     "format-disconnected": "󰤭 off",
     "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",
     "tooltip-format-ethernet": "{ifname}\n{ipaddr}/{cidr}",
-    "on-click": "nmcli device wifi rescan && nm-connection-editor",
-    "on-click-right": "kitty --class nmtui -e nmtui"
+    "on-click": "kitty --class impala -e impala",
+    "on-click-right": "nmcli device wifi rescan"
   },
 
   "bluetooth": {
@@ -101,7 +101,7 @@
     "format-connected": "󰂱 {device_alias}",
     "format-disabled": "󰂲",
     "format-off": "󰂲",
-    "on-click": "blueman-manager",
+    "on-click": "kitty --class bluetui -e bluetui",
     "on-click-right": "bluetoothctl power toggle",
     "tooltip-format": "{status}\n{controller_alias}\n{num_connections} connected"
   },
