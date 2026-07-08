@@ -93,19 +93,22 @@
 }
 
 .close-button {
-  background: transparent;
-  color: @muted;
-  border-radius: 8px;
-  border: none;
-  margin: 4px;
+  background: @surface;
+  color: @text-brt;
+  border: 1px solid @border;
+  border-radius: 999px;
+  margin: 6px;
   padding: 0;
-  min-width: 20px;
-  min-height: 20px;
+  min-width: 24px;
+  min-height: 24px;
+  font-size: 15px;
+  font-weight: bold;
 }
 
 .close-button:hover {
-  background: @surface;
-  color: @urgent;
+  background: @urgent;
+  color: #000000;
+  border-color: @urgent;
 }
 
 progressbar,
