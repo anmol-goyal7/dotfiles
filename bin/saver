@@ -4,7 +4,6 @@
 # Usage: saver
 # =============================================================================
 
-WIFI="wlp0s20f3"
 MODE_FILE="/tmp/.power-mode"
 NOTIF_ID=77701
 
@@ -31,45 +30,35 @@ sudo tlp bat >/dev/null 2>&1 || true
 step "Audio: power save"
 echo 1 | sudo tee /sys/module/snd_hda_intel/parameters/power_save >/dev/null 2>&1 || true
 
-# --- 5. Screen brightness: 25% ---
-step "Screen brightness: 25%"
-brightnessctl set 25% >/dev/null 2>&1 || true
-
-# --- 6. WiFi power save: ON ---
-step "WiFi power save: ON"
-sudo iw dev "$WIFI" set power_save on 2>/dev/null || true
-
-# --- 7. Bluetooth: OFF ---
+# --- 5. Bluetooth: OFF ---
 step "Bluetooth: OFF"
 bluetoothctl power off >/dev/null 2>&1 || true
 
-# --- 8. Hyprland: kill animations & blur (saves GPU cycles) ---
+# --- 6. Hyprland: kill animations & blur (saves GPU cycles) ---
 step "Hyprland: animations OFF, blur OFF"
 hyprctl keyword animations:enabled 0              >/dev/null 2>&1 || true
 hyprctl keyword decoration:blur:enabled 0          >/dev/null 2>&1 || true
 hyprctl keyword decoration:drop_shadow false        >/dev/null 2>&1 || true
 
-# --- 9. Disable NMI watchdog ---
+# --- 7. Disable NMI watchdog ---
 step "NMI watchdog: OFF"
 echo 0 | sudo tee /proc/sys/kernel/nmi_watchdog >/dev/null 2>&1 || true
 
-# --- 10. Mark current mode ---
+# --- 8. Mark current mode ---
 echo "saver" > "$MODE_FILE"
 
 # --- Done ---
 TURBO_STATE=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null)
 MAX_PERF=$(cat /sys/devices/system/cpu/intel_pstate/max_perf_pct 2>/dev/null)
 CURRENT_GOV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null)
-CURRENT_BRIGHT=$(brightnessctl get 2>/dev/null)
 
 echo ""
 echo "✓ Battery Saver ACTIVE"
 echo "  CPU governor  : $CURRENT_GOV"
 echo "  Turbo         : $([ "$TURBO_STATE" = "1" ] && echo "OFF" || echo "ON")"
 echo "  Max perf      : ${MAX_PERF}%"
-echo "  Brightness    : $CURRENT_BRIGHT / 400"
 
 notify-send -u low -t 4000 \
   "🔋 Battery Saver" \
-  "CPU: $CURRENT_GOV @ ${MAX_PERF}% cap\nTurbo: OFF | Screen: 25%\nWiFi: low power | BT: off\nAnimations: off" \
+  "CPU: $CURRENT_GOV @ ${MAX_PERF}% cap\nTurbo: OFF | BT: off\nAnimations: off" \
   2>/dev/null || true

@@ -24,6 +24,7 @@ case "$MODE" in
   saver)       ICON="🔋" ;;
   performance) ICON="⚡" ;;
   balance)     ICON="⚖️ " ;;
+  game)        ICON="🎮" ;;
   *)           ICON="❓" ;;
 esac
 

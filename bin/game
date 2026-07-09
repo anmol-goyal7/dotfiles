@@ -1,24 +1,27 @@
 #!/bin/bash
 # =============================================================================
-# PERFORMANCE MODE — Maximum CPU speed, everything at full power
-# Usage: performance
+# GAME MODE — Everything pinned to the absolute maximum for gaming
+# Like performance, but clocks are pinned at 100% and the compositor's
+# eye-candy is cut so the GPU is free for the game.
+# Does NOT touch WiFi/network or screen brightness.
+# Usage: game
 # =============================================================================
 
 MODE_FILE="/tmp/.power-mode"
 
 step() { echo "  → $1"; }
 
-echo "⚡ Applying Performance Mode..."
+echo "🎮 Applying Game Mode..."
 
 # --- 1. CPU Governor: performance ---
 step "CPU governor: performance"
 sudo cpupower frequency-set -g performance >/dev/null 2>&1 || true
 
-# --- 2. Intel P-State: enable turbo, full performance ---
-step "CPU turbo: ON | max perf: 100%"
+# --- 2. Intel P-State: turbo ON, pin clocks at 100% ---
+step "CPU turbo: ON | perf pinned: 100%"
 echo 0   | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo     >/dev/null 2>&1 || true
 echo 100 | sudo tee /sys/devices/system/cpu/intel_pstate/max_perf_pct >/dev/null 2>&1 || true
-echo 50  | sudo tee /sys/devices/system/cpu/intel_pstate/min_perf_pct >/dev/null 2>&1 || true
+echo 100 | sudo tee /sys/devices/system/cpu/intel_pstate/min_perf_pct >/dev/null 2>&1 || true
 
 # --- 3. TLP: force AC profile (acts as if plugged in) ---
 step "TLP: AC/performance mode"
@@ -32,31 +35,32 @@ echo 0 | sudo tee /sys/module/snd_hda_intel/parameters/power_save >/dev/null 2>&
 step "Bluetooth: ON"
 bluetoothctl power on >/dev/null 2>&1 || true
 
-# --- 6. Hyprland: animations + blur back on ---
-step "Hyprland: animations ON, blur ON"
-hyprctl keyword animations:enabled 1              >/dev/null 2>&1 || true
-hyprctl keyword decoration:blur:enabled 1          >/dev/null 2>&1 || true
-hyprctl keyword decoration:drop_shadow true         >/dev/null 2>&1 || true
+# --- 6. Hyprland: kill animations & blur (frees GPU for the game) ---
+step "Hyprland: animations OFF, blur OFF"
+hyprctl keyword animations:enabled 0              >/dev/null 2>&1 || true
+hyprctl keyword decoration:blur:enabled 0          >/dev/null 2>&1 || true
+hyprctl keyword decoration:drop_shadow false        >/dev/null 2>&1 || true
 
-# --- 7. NMI watchdog on (normal behavior) ---
-step "NMI watchdog: ON"
-echo 1 | sudo tee /proc/sys/kernel/nmi_watchdog >/dev/null 2>&1 || true
+# --- 7. NMI watchdog OFF (shave interrupt overhead) ---
+step "NMI watchdog: OFF"
+echo 0 | sudo tee /proc/sys/kernel/nmi_watchdog >/dev/null 2>&1 || true
 
 # --- 8. Mark current mode ---
-echo "performance" > "$MODE_FILE"
+echo "game" > "$MODE_FILE"
 
 # --- Done ---
 TURBO_STATE=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null)
 MAX_PERF=$(cat /sys/devices/system/cpu/intel_pstate/max_perf_pct 2>/dev/null)
+MIN_PERF=$(cat /sys/devices/system/cpu/intel_pstate/min_perf_pct 2>/dev/null)
 CURRENT_GOV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null)
 
 echo ""
-echo "✓ Performance Mode ACTIVE"
+echo "✓ Game Mode ACTIVE"
 echo "  CPU governor  : $CURRENT_GOV"
 echo "  Turbo         : $([ "$TURBO_STATE" = "0" ] && echo "ON" || echo "OFF")"
-echo "  Max perf      : ${MAX_PERF}%"
+echo "  Perf pinned   : ${MIN_PERF}%–${MAX_PERF}%"
 
 notify-send -u normal -t 4000 \
-  "⚡ Performance Mode" \
-  "CPU: $CURRENT_GOV @ turbo\nMax perf: ${MAX_PERF}%\nBT: on | Animations: on" \
+  "🎮 Game Mode" \
+  "CPU: $CURRENT_GOV @ turbo\nPerf pinned: ${MIN_PERF}–${MAX_PERF}%\nBT: on | Animations: off" \
   2>/dev/null || true
