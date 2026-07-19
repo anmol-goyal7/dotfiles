@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# dsa — DSA practice mode.
+#   dsa          open Claude | NeetCode 150 | kitty(~/repos/dsa) as equal thirds
+#                on the first empty workspace, or refocus if already open (Super+F).
+#                Turns on swaync do-not-disturb while the mode is open.
+#   dsa close    close the mode's three windows, DND back off (Super+Shift+D)
+#   dsa streak   print "<streak-days> <yes|no> <focus-min-today>"
+#                (consumed by the quickshell wallpaper widget)
+#   dsa stats    last-7-days practice summary in the terminal
+
+set -u
+
+STATE="${XDG_RUNTIME_DIR:-/tmp}/dsa-mode.state"
+DATA_DIR="$HOME/.local/share/dsa"
+SESSIONS="$DATA_DIR/sessions.log"
+POMO="$DATA_DIR/pomo.log"
+mkdir -p "$DATA_DIR"
+
+need_hypr() {
+    if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+        echo "dsa: needs a running Hyprland session" >&2
+        exit 1
+    fi
+}
+
+have() { hyprctl clients -j | jq -e --arg a "$1" 'any(.[]; .address == $a)' >/dev/null; }
+
+dnd() { command -v swaync-client >/dev/null && swaync-client "$1" >/dev/null 2>&1 || true; }
+
+streak() {
+    local days d today=no n=0 fmin
+    days=$(awk '/ open$/ { print substr($1, 1, 10) }' "$SESSIONS" 2>/dev/null | sort -u)
+    d=$(date +%F)
+    if [[ $days == *"$d"* ]]; then today=yes; else d=$(date -d yesterday +%F); fi
+    while [[ -n $days && $days == *"$d"* ]]; do n=$((n + 1)); d=$(date -d "$d - 1 day" +%F); done
+    fmin=$(awk -v d="$(date +%F)" \
+        'index($1, d) == 1 && $2 == "work" { gsub(/min$/, "", $3); s += $3 }
+         END { printf "%d", s + 0.499 }' "$POMO" 2>/dev/null)
+    echo "$n $today ${fmin:-0}"
+}
+
+stats() {
+    local today i d m s
+    today=$(date +%F)
+    local -A mins sess
+    while read -r d m; do mins[$d]=$m; done < <(
+        awk '$2 == "work" { d = substr($1, 1, 10); gsub(/min$/, "", $3); s[d] += $3 }
+             END { for (d in s) printf "%s %d\n", d, s[d] + 0.499 }' "$POMO" 2>/dev/null)
+    while read -r d s; do sess[$d]=$s; done < <(
+        awk '/ open$/ { d = substr($1, 1, 10); c[d]++ }
+             END { for (d in c) print d, c[d] }' "$SESSIONS" 2>/dev/null)
+
+    local max=1
+    for ((i = 6; i >= 0; i--)); do
+        d=$(date -d "$today - $i day" +%F)
+        ((${mins[$d]:-0} > max)) && max=${mins[$d]:-0}
+    done
+
+    printf '\n  \e[1mDSA — last 7 days\e[0m\n\n'
+    local wmin=0 wsess=0 label mark bar n j plural
+    for ((i = 6; i >= 0; i--)); do
+        d=$(date -d "$today - $i day" +%F)
+        m=${mins[$d]:-0}
+        s=${sess[$d]:-0}
+        label=$(date -d "$d" '+%a %d')
+        mark=' '; ((i == 0)) && mark='*'
+        if ((m > 0 || s > 0)); then
+            n=$((m * 22 / max)); ((m > 0 && n == 0)) && n=1
+            bar=''; for ((j = 0; j < n; j++)); do bar+='▇'; done
+            plural=s; ((s == 1)) && plural=''
+            printf '  %s\e[1m%s\e[0m  \e[38;5;183m%-22s\e[0m %3d min · %d session%s\n' \
+                "$mark" "$label" "$bar" "$m" "$s" "$plural"
+        else
+            printf '  %s\e[2m%s  —\e[0m\n' "$mark" "$label"
+        fi
+        wmin=$((wmin + m)); wsess=$((wsess + s))
+    done
+
+    local s_n s_today s_min best tot_s tot_m
+    read -r s_n s_today s_min <<<"$(streak)"
+    [[ $s_today == yes ]] && s_today='✓' || s_today='not yet'
+    best=$(awk '/ open$/ { print substr($1, 1, 10) }' "$SESSIONS" 2>/dev/null | sort -u |
+        awk -F- '{ t = mktime($1 " " $2 " " $3 " 12 0 0")
+                   run = (t - prev == 86400) ? run + 1 : 1
+                   if (run > best) best = run
+                   prev = t }
+                 END { print best + 0 }')
+    tot_s=$(grep -c ' open$' "$SESSIONS" 2>/dev/null || echo 0)
+    tot_m=$(awk '$2 == "work" { gsub(/min$/, "", $3); s += $3 } END { printf "%d", s + 0.499 }' "$POMO" 2>/dev/null)
+    local wp=s tp=s
+    ((wsess == 1)) && wp=''
+    [[ ${tot_s:-0} == 1 ]] && tp=''
+    printf '\n  streak \e[1m%s\e[0m (best %s) · today %s · week %d min / %d session%s · all-time %s min / %s session%s\n\n' \
+        "$s_n" "${best:-0}" "$s_today" "$wmin" "$wsess" "$wp" "${tot_m:-0}" "$tot_s" "$tp"
+}
+
+close_mode() {
+    if [[ ! -r $STATE ]]; then
+        command -v notify-send >/dev/null && notify-send -a dsa "dsa mode" "nothing to close"
+        return
+    fi
+    local a1 a2 a3 a batch=""
+    read -r a1 a2 a3 <"$STATE"
+    for a in "$a1" "$a2" "$a3"; do
+        [[ -n $a ]] && have "$a" && batch+="dispatch closewindow address:$a ; "
+    done
+    [[ -n $batch ]] && hyprctl --batch "$batch" >/dev/null
+    rm -f "$STATE"
+    echo "$(date -Is) close" >>"$SESSIONS"
+    dnd -df
+}
+
+open_mode() {
+    # Already open -> just focus it
+    local a1 a2 a3
+    if [[ -r $STATE ]]; then
+        read -r a1 a2 a3 <"$STATE"
+        if have "${a1:-}" && have "${a2:-}" && have "${a3:-}"; then
+            hyprctl dispatch focuswindow "address:$a1" >/dev/null
+            return
+        fi
+        rm -f "$STATE"
+    fi
+
+    hyprctl dispatch workspace empty >/dev/null
+    local ws
+    ws=$(hyprctl activeworkspace -j | jq -r '.id')
+
+    on_ws() { hyprctl clients -j | jq -r --argjson w "$ws" '.[] | select(.workspace.id == $w) | .address'; }
+
+    wait_for() { # wait_for <count> <tenths-of-seconds>
+        local i
+        for ((i = 0; i < $2; i++)); do
+            [[ $(on_ws | wc -l) -ge $1 ]] && return 0
+            sleep 0.1
+        done
+        command -v notify-send >/dev/null && notify-send -a dsa "dsa mode" "window $1 never appeared, giving up"
+        exit 1
+    }
+
+    new_addr() { # the address on $ws not already listed in "$@"
+        local a
+        for a in $(on_ws); do
+            [[ " $* " == *" $a "* ]] || { echo "$a"; return; }
+        done
+    }
+
+    # 1) Claude — left
+    setsid -f google-chrome-stable --app=https://claude.ai/new >/dev/null 2>&1
+    wait_for 1 150
+    a1=$(new_addr)
+
+    # 2) NeetCode 150 — middle (preselect right so it always lands right of Claude)
+    hyprctl --batch "dispatch focuswindow address:$a1 ; dispatch layoutmsg preselect r" >/dev/null
+    setsid -f google-chrome-stable --app='https://neetcode.io/practice?tab=neetcode150' >/dev/null 2>&1
+    wait_for 2 100
+    a2=$(new_addr "$a1")
+
+    # 3) Terminal in ~/repos/dsa — right
+    hyprctl --batch "dispatch focuswindow address:$a2 ; dispatch layoutmsg preselect r" >/dev/null
+    setsid -f kitty --directory "$HOME/repos/dsa" >/dev/null 2>&1
+    wait_for 3 100
+    a3=$(new_addr "$a1" "$a2")
+
+    # Equal thirds: shrink Claude from 1/2 to 1/3 of the total window width;
+    # the NeetCode/kitty split is already even, so all three end up equal.
+    local third cur
+    third=$(hyprctl clients -j | jq --arg a1 "$a1" --arg a2 "$a2" --arg a3 "$a3" \
+        '[.[] | select(.address==$a1 or .address==$a2 or .address==$a3) | .size[0]] | add / 3 | floor')
+    cur=$(hyprctl clients -j | jq --arg a "$a1" '.[] | select(.address==$a) | .size[0]')
+    hyprctl --batch "dispatch focuswindow address:$a1 ; dispatch resizeactive $((third - cur)) 0 ; dispatch focuswindow address:$a3" >/dev/null
+
+    printf '%s %s %s\n' "$a1" "$a2" "$a3" >"$STATE"
+    echo "$(date -Is) open" >>"$SESSIONS"
+    dnd -dn
+}
+
+case ${1:-} in
+    '')     need_hypr; open_mode ;;
+    close)  need_hypr; close_mode ;;
+    streak) streak ;;
+    stats)  stats ;;
+    *)      echo "usage: dsa [close|streak|stats]" >&2; exit 2 ;;
+esac
