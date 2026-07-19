@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# pomo — terminal pomodoro with desktop notifications.
+#   pomo              4 cycles of 25 min focus + 5 min break
+#   pomo 50 10        4 cycles of 50 min focus + 10 min break
+#   pomo 50 10 2      2 cycles of 50/10
+# Focus phases turn on swaync do-not-disturb; breaks restore whatever state
+# you started with. Ctrl+C stops early (and restores DND).
+# Completed focus blocks land in ~/.local/share/dsa/pomo.log
+
+set -u
+
+work_min=${1:-25}
+break_min=${2:-5}
+cycles=${3:-4}
+
+work_s=$(awk -v m="$work_min" 'BEGIN { printf "%d", m * 60 }')
+break_s=$(awk -v m="$break_min" 'BEGIN { printf "%d", m * 60 }')
+
+LOG="$HOME/.local/share/dsa/pomo.log"
+mkdir -p "${LOG%/*}"
+
+notify() { printf '\a'; command -v notify-send >/dev/null && notify-send -a pomo "$@"; }
+
+dnd_baseline=false
+command -v swaync-client >/dev/null &&
+    dnd_baseline=$(swaync-client -D 2>/dev/null | tr -d '[:space:]')
+
+dnd_set() { # dnd_set on|baseline
+    command -v swaync-client >/dev/null || return 0
+    if [[ $1 == on || $dnd_baseline == true ]]; then
+        swaync-client -dn >/dev/null 2>&1
+    else
+        swaync-client -df >/dev/null 2>&1
+    fi
+}
+
+focused_s=0
+cycle=1
+
+finish() {
+    dnd_set baseline
+    printf '\n\e[1mfocused %d min total\e[0m\n' "$((focused_s / 60))"
+    exit 0
+}
+trap finish INT
+trap 'dnd_set baseline' EXIT
+
+countdown() { # countdown <seconds> <label> <ansi-color>
+    local end=$(($(date +%s) + $1)) left
+    while (((left = end - $(date +%s)) > 0)); do
+        printf '\r\e[K\e[%sm %s %02d:%02d\e[0m  cycle %d/%d — Ctrl+C to stop ' \
+            "$3" "$2" $((left / 60)) $((left % 60)) "$cycle" "$cycles"
+        sleep 1
+    done
+    printf '\r\e[K'
+}
+
+for ((cycle = 1; cycle <= cycles; cycle++)); do
+    notify "🍅 Focus" "${work_min} min — cycle ${cycle}/${cycles}"
+    dnd_set on
+    countdown "$work_s" "🍅 focus" "1;31"
+    dnd_set baseline
+    focused_s=$((focused_s + work_s))
+    echo "$(date -Is) work ${work_min}min" >>"$LOG"
+
+    ((cycle == cycles)) && break
+
+    notify -u critical "☕ Break" "${break_min} min — stand up, look away from the screen"
+    countdown "$break_s" "☕ break" "1;32"
+done
+
+notify -u critical "✅ Pomodoro done" "$((focused_s / 60)) min focused. Nice."
+printf '\e[1mdone — %d min focused\e[0m\n' "$((focused_s / 60))"
