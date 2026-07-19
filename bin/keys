@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# keys — searchable Hyprland keybind cheatsheet (Super+/).
+# Parses UserKeybinds.conf live, so it never goes stale.
+# Enter runs the selected bind, Esc just closes.
+#   keys --list   print the parsed table to stdout instead of rofi
+
+set -u
+
+CONF="$HOME/.config/hypr/UserConfigs/UserKeybinds.conf"
+DEFAULTS="$HOME/.config/hypr/UserConfigs/01-UserDefaults.conf"
+THEME="$HOME/.config/rofi/themes/tokyonight-oled.rasi"
+
+trim() { local t=$1; t=${t#"${t%%[![:space:]]*}"}; printf '%s' "${t%"${t##*[![:space:]]}"}"; }
+
+# ---- collect $variable definitions from the config files
+declare -A vars
+while IFS= read -r line; do
+    [[ $line =~ ^\$([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+    v=${BASH_REMATCH[2]}
+    vars[${BASH_REMATCH[1]}]=$(trim "${v%%#*}")
+done < <(cat "$CONF" "$DEFAULTS" 2>/dev/null)
+vars[HOME]=$HOME
+
+subst() { # expand $variables in a string
+    local s=$1 k
+    for k in "${!vars[@]}"; do s=${s//"\$$k"/${vars[$k]}}; done
+    printf '%s' "$s"
+}
+
+pretty_mods() { # "SUPER SHIFT" -> "Super+Shift+"
+    local out='' m
+    for m in $1; do
+        case ${m^^} in
+            SUPER) out+='Super+' ;;
+            SHIFT) out+='Shift+' ;;
+            CTRL | CONTROL) out+='Ctrl+' ;;
+            ALT) out+='Alt+' ;;
+            *) out+="${m}+" ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
+pretty_key() {
+    case $1 in
+        SPACE | space) echo 'Space' ;;
+        slash) echo '/' ;;
+        period) echo '.' ;;
+        comma) echo ',' ;;
+        escape) echo 'Esc' ;;
+        RETURN | Return) echo 'Enter' ;;
+        mouse:272) echo 'LMB' ;;
+        mouse:273) echo 'RMB' ;;
+        *) echo "$1" ;;
+    esac
+}
+
+display=()
+actions=()
+submap=''
+while IFS= read -r raw; do
+    line=$(trim "$raw")
+    if [[ $line =~ ^submap[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+        s=$(trim "${BASH_REMATCH[1]}")
+        [[ $s == reset* ]] && submap='' || submap=$s
+        continue
+    fi
+    [[ $line =~ ^(bind[elmr]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+    kind=${BASH_REMATCH[1]}
+    body=${BASH_REMATCH[2]}
+    desc=''
+    if [[ $body == *#* ]]; then desc=$(trim "${body#*#}"); body=${body%%#*}; fi
+    IFS=, read -r mods key disp arg <<<"$body"
+    mods=$(trim "${mods:-}"); key=$(trim "${key:-}")
+    disp=$(trim "${disp:-}"); arg=$(trim "${arg:-}")
+    [[ -z $key || -z $disp ]] && continue
+
+    combo="$(pretty_mods "$(subst "$mods")")$(pretty_key "$key")"
+    [[ -n $submap ]] && combo="[$submap] $combo"
+    [[ -z $desc && $disp == submap ]] && desc="enter '$arg' mode"
+    [[ -z $desc ]] && desc=$(subst "$(trim "$disp $arg")")
+    display+=("$(printf '%-26s %s' "$combo" "$desc")")
+
+    if [[ -n $submap || $kind == bindm ]]; then
+        actions+=('') # submap/mouse binds: display only
+    elif [[ $disp == exec ]]; then
+        actions+=("exec $(subst "$arg")")
+    else
+        actions+=("dispatch $disp $(subst "$arg")")
+    fi
+done <"$CONF"
+
+if [[ ${1:-} == --list ]]; then
+    printf '%s\n' "${display[@]}"
+    exit 0
+fi
+
+idx=$(printf '%s\n' "${display[@]}" | rofi -dmenu -i -no-custom -p 'keybinds' -format i -theme "$THEME")
+[[ -z ${idx:-} || $idx -lt 0 ]] && exit 0
+act=${actions[$idx]}
+case $act in
+    'exec '*) setsid -f bash -c "${act#exec }" >/dev/null 2>&1 ;;
+    'dispatch '*) hyprctl dispatch ${act#dispatch } >/dev/null ;;
+esac
