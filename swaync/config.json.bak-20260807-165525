@@ -25,12 +25,7 @@
   "image-visibility": "when-available",
   "script-fail-notify": true,
   "notification-2fa-action": true,
-  "widgets": [
-    "title",
-    "dnd",
-    "mpris",
-    "notifications"
-  ],
+  "widgets": ["title", "dnd", "mpris", "notifications"],
   "widget-config": {
     "title": {
       "text": "Notifications",
@@ -43,17 +38,6 @@
     "mpris": {
       "image-size": 64,
       "image-radius": 6
-    }
-  },
-  "notification-visibility": {
-    "warp-error": {
-      "state": "enabled",
-      "app-name": "WARP",
-      "summary": "Error"
-    },
-    "warp-toggle": {
-      "state": "transient",
-      "app-name": "WARP"
     }
   }
 }

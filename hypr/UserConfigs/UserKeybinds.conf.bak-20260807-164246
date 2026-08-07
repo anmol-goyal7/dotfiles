@@ -194,6 +194,3 @@ bind = $mainMod SHIFT, F7, exec, pavucontrol
 
 # Airplane mode: SUPER+F8 toggle (kills both wifi + bt)
 bind = $mainMod, F8, exec, $scriptsDir/ToggleAirplane.sh
-
-# Cloudflare WARP: SUPER+W toggle connect/disconnect
-bind = $mainMod, W, exec, $HOME/.local/bin/warp-toggle
