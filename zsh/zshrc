@@ -153,6 +153,7 @@ alias update='sudo pacman -Syu'
 alias install='sudo pacman -S'
 alias remove='sudo pacman -Rs'
 alias search='pacman -Ss'
+alias hyprland='start-hyprland'   # 0.56+ watchdog launcher; bare binary warns at startup
 
 # Taskwarrior
 today() {

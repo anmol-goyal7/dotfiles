@@ -4,6 +4,7 @@
 # editor/installer backups
 *.bak
 *.bak.*
+*.bak-*
 *.backup
 
 # runtime state files
