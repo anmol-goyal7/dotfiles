@@ -1,0 +1,21 @@
+# Global clangd config — applies to every C/C++/CUDA file with no
+# compile_commands.json (i.e. most of ~/repos/c, ~/repos/cpp, ~/repos/dsa).
+# A project-local .clangd or compile_commands.json still wins over this.
+
+CompileFlags:
+  Add:
+    - -Wall
+    - -Wextra
+    - -Wshadow
+
+Diagnostics:
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - performance-*
+    Remove:
+      - bugprone-easily-swappable-parameters
+  UnusedIncludes: Strict
+
+InlayHints:
+  Enabled: false

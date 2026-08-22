@@ -82,6 +82,9 @@ return {
         { "<leader>r",  group = "Replace" },
         { "<leader>s",  group = "Splits" },
         { "<leader>t",  group = "Tabs" },
+        { "<leader>D",  group = "Debug (DAP)" },
+        { "<leader>X",  group = "Trouble" },
+        { "<leader>m",  group = "Make / Build" },
         { "<leader>ag", group = "Antigravity" },
       })
     end,
@@ -358,7 +361,8 @@ return {
           map("<C-k>",      vim.lsp.buf.signature_help,"Signature help")
           map("<leader>lr", vim.lsp.buf.rename,        "Rename")
           map("<leader>la", vim.lsp.buf.code_action,   "Code action")
-          map("<leader>lf", function() vim.lsp.buf.format({ async = true }) end, "Format")
+          -- NOTE: <leader>lf is owned by conform.nvim (clang-format et al,
+          -- with LSP as fallback) — see the FORMATTING block below.
           map("<leader>ls", tb.lsp_document_symbols,  "Document symbols")
           map("<leader>lS", tb.lsp_workspace_symbols, "Workspace symbols")
           map("<leader>li", "<cmd>LspInfo<CR>",        "LSP info")
@@ -379,8 +383,277 @@ return {
         },
       })
 
-      vim.lsp.enable({ "lua_ls", "pyright", "bashls", "jsonls", "cssls", "html" })
+      -- C / C++ — system clangd (/usr/bin/clangd from the `clang` package).
+      -- Warning flags live in ~/.config/clangd/config.yaml so they also apply
+      -- to loose single-file translation units with no compile_commands.json.
+      vim.lsp.config("clangd", {
+        cmd = {
+          "clangd",
+          "--background-index",
+          "--clang-tidy",
+          "--completion-style=detailed",
+          "--header-insertion=never",
+          "--fallback-style=llvm",
+        },
+        filetypes = { "c", "cpp", "objc", "objcpp", "cuda" },
+      })
+
+      -- Rust — rust-analyzer from rustup/cargo (~/.cargo/bin), not mason.
+      vim.lsp.config("rust_analyzer", {
+        settings = {
+          ["rust-analyzer"] = {
+            cargo       = { allFeatures = true },
+            check       = { command = "clippy" },
+            checkOnSave = true,
+          },
+        },
+      })
+
+      vim.lsp.enable({
+        "lua_ls", "pyright", "bashls", "jsonls", "cssls", "html",
+        "clangd", "rust_analyzer",
+      })
     end,
+  },
+
+  -- ============================================================================
+  -- LINTING — real compiler warnings (-Wall -Wextra) on save
+  -- ============================================================================
+  {
+    "mfussenegger/nvim-lint",
+    event = { "BufReadPost", "BufNewFile" },
+    config = function()
+      local lint   = require("lint")
+      local parser = require("lint.parser")
+
+      -- gcc/g++ diagnostics: "file.c:12:5: warning: msg [-Wunused-variable]"
+      local pattern  = "([^:]+):(%d+):(%d+):%s+(%w+):%s+(.+)"
+      local groups   = { "file", "lnum", "col", "severity", "message" }
+      local severity = {
+        ["error"]   = vim.diagnostic.severity.ERROR,
+        ["warning"] = vim.diagnostic.severity.WARN,
+        ["note"]    = vim.diagnostic.severity.HINT,
+      }
+
+      local function cc(cmd, extra)
+        local args = { "-fsyntax-only", "-Wall", "-Wextra", "-fdiagnostics-plain-output" }
+        vim.list_extend(args, extra or {})
+        return {
+          cmd             = cmd,
+          stdin           = false,
+          append_fname    = true,
+          args            = args,
+          stream          = "stderr",
+          ignore_exitcode = true,
+          parser          = parser.from_pattern(pattern, groups, severity, { source = cmd }),
+        }
+      end
+
+      lint.linters.gcc = cc("gcc")
+      lint.linters.gpp = cc("g++")
+
+      lint.linters_by_ft = {
+        c   = { "gcc" },
+        cpp = { "gpp" },
+      }
+
+      -- clangd already reports most of -Wall live, so the compiler pass is
+      -- opt-out: it exists to catch gcc-only warnings (-Wmaybe-uninitialized,
+      -- -Wstringop-overflow, ...) and to match what your build actually prints.
+      vim.g.cc_lint_enabled = true
+
+      vim.api.nvim_create_autocmd({ "BufWritePost", "BufReadPost" }, {
+        group    = vim.api.nvim_create_augroup("nvim-lint", { clear = true }),
+        callback = function()
+          if vim.g.cc_lint_enabled == false and vim.tbl_contains({ "c", "cpp" }, vim.bo.filetype) then
+            return
+          end
+          lint.try_lint()
+        end,
+      })
+
+      vim.keymap.set("n", "<leader>ll", function() lint.try_lint() end, { desc = "Lint buffer now" })
+
+      vim.keymap.set("n", "<leader>lt", function()
+        vim.g.cc_lint_enabled = not vim.g.cc_lint_enabled
+        if vim.g.cc_lint_enabled then
+          lint.try_lint()
+        else
+          vim.diagnostic.reset(lint.get_namespace("gcc"))
+          vim.diagnostic.reset(lint.get_namespace("gpp"))
+        end
+        vim.notify("gcc/g++ lint " .. (vim.g.cc_lint_enabled and "on" or "off"))
+      end, { desc = "Toggle gcc/g++ lint" })
+    end,
+  },
+
+  -- ============================================================================
+  -- DEBUGGING — nvim-dap + codelldb (C / C++ / Rust)
+  -- F-keys, not <leader>d: that prefix is already delete-to-void + diagnostics.
+  -- ============================================================================
+  {
+    "mfussenegger/nvim-dap",
+    dependencies = {
+      "rcarriga/nvim-dap-ui",
+      "nvim-neotest/nvim-nio",
+      "theHamsta/nvim-dap-virtual-text",
+      "williamboman/mason.nvim",
+    },
+    keys = {
+      "<F5>", "<F9>", "<F10>", "<F11>", "<F12>",
+      "<leader>Db", "<leader>Dr", "<leader>Du", "<leader>Dc", "<leader>Dx",
+    },
+    config = function()
+      local dap, dapui = require("dap"), require("dapui")
+
+      dapui.setup({ floating = { border = "rounded" } })
+      require("nvim-dap-virtual-text").setup({ commented = true })
+
+      -- codelldb ships via mason: :MasonInstall codelldb
+      local codelldb = vim.fn.stdpath("data") .. "/mason/bin/codelldb"
+
+      dap.adapters.codelldb = {
+        type = "server",
+        port = "${port}",
+        executable = {
+          command = codelldb,
+          args    = { "--port", "${port}" },
+        },
+      }
+
+      -- Ask for the binary, defaulting to the nearest sensible guess.
+      local function pick_binary()
+        local guess = vim.fn.getcwd() .. "/"
+        local stem  = vim.fn.expand("%:t:r")
+        for _, cand in ipairs({ guess .. stem, guess .. "build/" .. stem, guess .. "a.out" }) do
+          if vim.fn.executable(cand) == 1 then guess = cand break end
+        end
+        return vim.fn.input("Executable: ", guess, "file")
+      end
+
+      local cfg = {
+        {
+          name         = "Launch",
+          type         = "codelldb",
+          request      = "launch",
+          program      = pick_binary,
+          cwd          = "${workspaceFolder}",
+          stopOnEntry  = false,
+          args         = function()
+            local a = vim.fn.input("Args: ")
+            return a ~= "" and vim.split(a, " ") or {}
+          end,
+        },
+        {
+          name    = "Attach to process",
+          type    = "codelldb",
+          request = "attach",
+          pid     = require("dap.utils").pick_process,
+          cwd     = "${workspaceFolder}",
+        },
+      }
+
+      dap.configurations.c    = cfg
+      dap.configurations.cpp  = cfg
+      dap.configurations.rust = cfg
+
+      -- UI opens/closes with the session
+      dap.listeners.before.attach.dapui_config           = function() dapui.open() end
+      dap.listeners.before.launch.dapui_config           = function() dapui.open() end
+      dap.listeners.before.event_terminated.dapui_config = function() dapui.close() end
+      dap.listeners.before.event_exited.dapui_config     = function() dapui.close() end
+
+      vim.fn.sign_define("DapBreakpoint",          { text = " ", texthl = "DiagnosticSignError" })
+      vim.fn.sign_define("DapBreakpointCondition", { text = " ", texthl = "DiagnosticSignWarn" })
+      vim.fn.sign_define("DapLogPoint",            { text = " ", texthl = "DiagnosticSignInfo" })
+      vim.fn.sign_define("DapStopped",             { text = " ", texthl = "DiagnosticSignHint", linehl = "Visual" })
+
+      local map = function(k, fn, desc) vim.keymap.set("n", k, fn, { desc = desc }) end
+
+      map("<F5>",  dap.continue,          "Debug: start / continue")
+      map("<F9>",  dap.toggle_breakpoint, "Debug: toggle breakpoint")
+      map("<F10>", dap.step_over,         "Debug: step over")
+      map("<F11>", dap.step_into,         "Debug: step into")
+      map("<F12>", dap.step_out,          "Debug: step out")
+
+      map("<leader>Db", dap.toggle_breakpoint, "Debug: toggle breakpoint")
+      map("<leader>DB", function()
+        dap.set_breakpoint(vim.fn.input("Breakpoint condition: "))
+      end, "Debug: conditional breakpoint")
+      map("<leader>Dr", dap.repl.toggle,   "Debug: REPL")
+      map("<leader>Du", dapui.toggle,      "Debug: toggle UI")
+      map("<leader>Dc", dap.run_to_cursor, "Debug: run to cursor")
+      map("<leader>Dl", dap.run_last,      "Debug: re-run last")
+      map("<leader>Dx", function()
+        dap.terminate()
+        dapui.close()
+      end, "Debug: terminate")
+      map("<leader>De", dapui.eval,        "Debug: eval expression")
+      vim.keymap.set("v", "<leader>De", dapui.eval, { desc = "Debug: eval selection" })
+    end,
+  },
+
+  -- ============================================================================
+  -- FORMATTING — clang-format / stylua / etc on save
+  -- ============================================================================
+  {
+    "stevearc/conform.nvim",
+    event = { "BufWritePre" },
+    cmd   = "ConformInfo",
+    config = function()
+      local conform = require("conform")
+
+      conform.setup({
+        -- Only formatters actually installed are listed (clang-format and
+        -- rustfmt are system/cargo; stylua and shfmt come from mason).
+        -- Everything else falls through to the LSP formatter via
+        -- lsp_format = "fallback" below.
+        formatters_by_ft = {
+          c    = { "clang_format" },
+          cpp  = { "clang_format" },
+          cuda = { "clang_format" },
+          rust = { "rustfmt" },
+          lua  = { "stylua" },
+          sh   = { "shfmt" },
+        },
+        -- Opt-out: :FormatToggle, or <leader>lF
+        format_on_save = function(bufnr)
+          if vim.g.format_on_save == false or vim.b[bufnr].format_on_save == false then
+            return nil
+          end
+          return { timeout_ms = 1000, lsp_format = "fallback" }
+        end,
+      })
+
+      vim.g.format_on_save = true
+
+      vim.keymap.set({ "n", "v" }, "<leader>lf", function()
+        conform.format({ async = true, lsp_format = "fallback" })
+      end, { desc = "Format buffer/selection" })
+
+      vim.keymap.set("n", "<leader>lF", function()
+        vim.g.format_on_save = not vim.g.format_on_save
+        vim.notify("format on save " .. (vim.g.format_on_save and "on" or "off"))
+      end, { desc = "Toggle format on save" })
+    end,
+  },
+
+  -- ============================================================================
+  -- DIAGNOSTICS PANEL
+  -- ============================================================================
+  {
+    "folke/trouble.nvim",
+    cmd  = "Trouble",
+    opts = { focus = true },
+    keys = {
+      -- <leader>X, not <leader>x: lowercase x is already "save and quit".
+      { "<leader>Xx", "<cmd>Trouble diagnostics toggle<cr>",              desc = "Diagnostics (workspace)" },
+      { "<leader>Xb", "<cmd>Trouble diagnostics toggle filter.buf=0<cr>", desc = "Diagnostics (buffer)" },
+      { "<leader>Xs", "<cmd>Trouble symbols toggle<cr>",                  desc = "Symbols" },
+      { "<leader>Xq", "<cmd>Trouble qflist toggle<cr>",                   desc = "Quickfix list" },
+      { "<leader>Xl", "<cmd>Trouble loclist toggle<cr>",                  desc = "Location list" },
+      { "<leader>Xt", "<cmd>Trouble todo toggle<cr>",                     desc = "TODOs" },
+    },
   },
 
   -- ============================================================================

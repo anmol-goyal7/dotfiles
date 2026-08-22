@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# cdbg — build a C/C++ file with the right instrumentation and run it.
+#   cdbg san  foo.c [args]   ASan + UBSan: use-after-free, OOB, overflow (fast)
+#   cdbg mem  foo.c [args]   valgrind memcheck: leaks + uninitialised reads
+#   cdbg gdb  foo.c [args]   plain -g build, drop into gdb
+#   cdbg rr   foo.c [args]   record under rr, then replay (step backwards!)
+#   cdbg bench foo.c [args]  build -O2 and hyperfine it
+#
+# Binaries go to /tmp/cdbg/ so they never litter the repo. Works on a lone
+# file — for a whole project use `make` + the nvim <leader>m maps instead.
+#
+# ASan and valgrind overlap: ASan is ~2x slower and catches OOB on stack/globals;
+# valgrind is ~20x slower but needs no rebuild and finds uninitialised reads.
+# Reach for san first, mem when san comes up clean and it still misbehaves.
+
+set -u
+
+die() { printf '\033[31mcdbg:\033[0m %s\n' "$*" >&2; exit 1; }
+
+mode=${1:-}
+src=${2:-}
+[ -n "$mode" ] || die "usage: cdbg {san|mem|gdb|rr|bench} <file.c|file.cpp> [args...]"
+[ -n "$src" ]  || die "no source file given"
+[ -f "$src" ]  || die "no such file: $src"
+shift 2
+
+case "$src" in
+  *.cpp|*.cc|*.cxx) cc=g++ ;;
+  *.c)              cc=gcc ;;
+  *) die "not a C/C++ source file: $src" ;;
+esac
+
+out="/tmp/cdbg/$(basename "${src%.*}")"
+mkdir -p /tmp/cdbg
+
+build() {
+  printf '\033[34m==>\033[0m %s %s\n' "$cc" "$*"
+  # shellcheck disable=SC2068
+  $cc $@ -o "$out" "$src" || die "build failed"
+}
+
+case "$mode" in
+  san)
+    build -g -O1 -Wall -Wextra -fno-omit-frame-pointer \
+          -fsanitize=address,undefined -fno-sanitize-recover=all
+    ASAN_OPTIONS=detect_leaks=1:abort_on_error=0:symbolize=1 \
+    UBSAN_OPTIONS=print_stacktrace=1 \
+      "$out" "$@"
+    ;;
+  mem)
+    command -v valgrind >/dev/null || die "valgrind not installed"
+    build -g -O0 -Wall -Wextra
+    valgrind --leak-check=full --show-leak-kinds=all \
+             --track-origins=yes --error-exitcode=1 \
+             "$out" "$@"
+    ;;
+  gdb)
+    build -g -O0 -Wall -Wextra
+    gdb --args "$out" "$@"
+    ;;
+  rr)
+    command -v rr >/dev/null || die "rr not installed"
+    if [ "$(sysctl -n kernel.perf_event_paranoid 2>/dev/null || echo 4)" -gt 1 ]; then
+      die "rr needs kernel.perf_event_paranoid <= 1
+     this boot only:  sudo sysctl kernel.perf_event_paranoid=1
+     persist:         echo 'kernel.perf_event_paranoid=1' | sudo tee /etc/sysctl.d/99-rr.conf"
+    fi
+    build -g -O0 -Wall -Wextra
+    rr record "$out" "$@" || die "record failed"
+    printf '\033[34m==>\033[0m replaying — use reverse-continue / reverse-step\n'
+    rr replay
+    ;;
+  bench)
+    command -v hyperfine >/dev/null || die "hyperfine not installed"
+    build -O2 -march=native -Wall -Wextra
+    hyperfine --warmup 3 "$out $*"
+    ;;
+  *)
+    die "unknown mode '$mode' (want san|mem|gdb|rr|bench)"
+    ;;
+esac

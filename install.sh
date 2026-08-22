@@ -49,6 +49,7 @@ link "$DOTFILES/yazi"           "$CONFIG/yazi"
 link "$DOTFILES/qutebrowser"    "$CONFIG/qutebrowser"
 link "$DOTFILES/zathura"        "$CONFIG/zathura"
 link "$DOTFILES/nvim"           "$CONFIG/nvim"
+link "$DOTFILES/clangd"         "$CONFIG/clangd"
 link "$DOTFILES/zsh/zshrc"      "$HOME/.zshrc"
 link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 

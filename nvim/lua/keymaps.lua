@@ -138,3 +138,109 @@ map("n", "<leader>agd", function()
   local file = vim.fn.expand("%:p")
   vim.fn.system({ "antigravity", "--diff", file, file })
 end, { desc = "Antigravity: diff current file" })
+
+-- =============================================================================
+-- BUILD — :make into the quickfix list, then jump to the first error
+-- Uses the project's Makefile when there is one, otherwise compiles the
+-- current file straight to build/<name>. Quickfix nav is ]q / [q as usual.
+-- =============================================================================
+local function project_root()
+  local found = vim.fs.find({ "Makefile", "makefile", "CMakeLists.txt", "Cargo.toml" }, {
+    upward = true,
+    path   = vim.fn.expand("%:p:h"),
+  })[1]
+  return found and vim.fs.dirname(found) or nil
+end
+
+local function build(extra)
+  vim.cmd("silent! write")
+  local root = project_root()
+
+  if root and vim.uv.fs_stat(root .. "/Cargo.toml") then
+    vim.o.makeprg = "cargo build"
+  elseif root then
+    vim.o.makeprg = "make -C " .. vim.fn.fnameescape(root)
+  else
+    -- Lone file: gcc/g++ it into build/ with warnings + debug info on.
+    local ft  = vim.bo.filetype
+    local cc  = (ft == "cpp") and "g++" or "gcc"
+    local src = vim.fn.expand("%")
+    local out = vim.fn.expand("%:p:h") .. "/build/" .. vim.fn.expand("%:t:r")
+    vim.fn.mkdir(vim.fn.fnamemodify(out, ":h"), "p")
+    vim.o.makeprg = string.format("%s -g -Wall -Wextra -o %s %s", cc, out, src)
+  end
+
+  vim.cmd("make! " .. (extra or ""))
+  local qf = vim.fn.getqflist()
+  local bad = vim.tbl_filter(function(e) return e.valid == 1 end, qf)
+  if #bad > 0 then
+    vim.cmd("copen")
+    vim.cmd("cfirst")
+  else
+    vim.cmd("cclose")
+    vim.notify("build ok: " .. vim.o.makeprg)
+  end
+end
+
+map("n", "<leader>mm", function() build() end,           { desc = "Make / build" })
+map("n", "<leader>mc", function() build("clean") end,    { desc = "Make clean" })
+map("n", "<leader>mr", function() build("run") end,      { desc = "Make run" })
+map("n", "<leader>mt", function() build("test") end,     { desc = "Make test" })
+
+-- Regenerate compile_commands.json so clangd sees the project's real flags.
+map("n", "<leader>mb", function()
+  local root = project_root()
+  if not root then
+    vim.notify("no Makefile/CMakeLists found above this file", vim.log.levels.WARN)
+    return
+  end
+  vim.notify("running bear -- make in " .. root .. " ...")
+  -- `make clean` first: bear only records compiles that actually run, so an
+  -- already-built tree would produce an empty compile_commands.json.
+  vim.system({ "make", "clean" }, { cwd = root, text = true }, function()
+    vim.system({ "bear", "--", "make" }, { cwd = root, text = true }, function(res)
+      vim.schedule(function()
+        if res.code == 0 then
+          vim.notify("compile_commands.json written to " .. root .. " — restarting clangd")
+          vim.cmd("LspRestart clangd")
+        else
+          vim.notify("bear failed:\n" .. (res.stderr or ""), vim.log.levels.ERROR)
+        end
+      end)
+    end)
+  end)
+end, { desc = "Bear: regen compile_commands.json" })
+
+-- =============================================================================
+-- CPPCHECK — deeper static analysis, on demand (not on save: clangd's
+-- clang-tidy already runs live, and three sources of squiggles is too many).
+-- Results land in the quickfix list; ]q / [q to walk them.
+-- =============================================================================
+map("n", "<leader>lc", function()
+  local target = vim.fn.expand("%:p")
+  if vim.bo.filetype ~= "c" and vim.bo.filetype ~= "cpp" then
+    vim.notify("cppcheck: not a C/C++ buffer", vim.log.levels.WARN)
+    return
+  end
+  vim.notify("cppcheck: analysing " .. vim.fn.expand("%:t") .. " ...")
+  vim.system({
+    "cppcheck", "--enable=warning,style,performance,portability",
+    "--inline-suppr", "--quiet",
+    "--template={file}:{line}:{column}: {severity}: {message} [{id}]",
+    target,
+  }, { text = true }, function(res)
+    vim.schedule(function()
+      local out = (res.stderr or "") .. (res.stdout or "")
+      if vim.trim(out) == "" then
+        vim.notify("cppcheck: clean")
+        return
+      end
+      vim.fn.setqflist({}, " ", {
+        title = "cppcheck",
+        lines = vim.split(vim.trim(out), "\n"),
+        efm   = "%f:%l:%c: %t%*[^:]: %m",
+      })
+      vim.cmd("copen")
+    end)
+  end)
+end, { desc = "cppcheck current file" })
