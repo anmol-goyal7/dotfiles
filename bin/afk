@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# afk — keep the laptop fully awake for a set window.
+#   afk 9h        no dim, no screen-off, no lock, no suspend; lid-close does nothing
+#   afk 45m -b    same, but blank the screen right away (saves power while you're gone)
+#   afk on        same, with no time limit — until `afk off` or `suspend`
+#   afk           show status
+#   afk off       cancel now, hand control back to hypridle
+#
+# Durations: 9h | 45m | 90s | 1h30m | bare number = minutes.
+# `suspend` (zsh function in ~/.zshrc) is an alias for `afk off` — it ends the
+# window and leaves the laptop up and usable; it does not sleep the machine.
+# When the window runs out, hypridle's normal dim→lock→suspend ladder resumes.
+
+set -u
+
+STATE="${XDG_RUNTIME_DIR:-/tmp}/afk.state"
+
+note() { notify-send -u low -t 5000 "$@" 2>/dev/null || true; }
+
+fmt() { # seconds -> "7h 12m" / "45m" / "30s"
+    local s=$1 h m
+    h=$((s / 3600)); m=$(((s % 3600) / 60))
+    if ((h > 0)); then printf '%dh %dm' "$h" "$m"
+    elif ((m > 0)); then printf '%dm' "$m"
+    else printf '%ds' "$s"; fi
+}
+
+parse_dur() { # "1h30m" -> seconds; "on"/"inf" -> 0 (no limit)
+    local s=${1,,} total=0 num unit seen=0
+    [[ $s == on || $s == inf || $s == forever ]] && { echo 0; return 0; }
+    while [[ $s =~ ^([0-9]+)([hms]?)(.*)$ ]]; do
+        num=${BASH_REMATCH[1]}; unit=${BASH_REMATCH[2]}; s=${BASH_REMATCH[3]}; seen=1
+        case $unit in
+            h) total=$((total + num * 3600)) ;;
+            s) total=$((total + num)) ;;
+            *) total=$((total + num * 60)) ;;   # bare number = minutes
+        esac
+    done
+    [[ $seen == 1 && -z $s ]] || return 1
+    echo "$total"
+}
+
+active_pgid() { # echo pgid if an afk window is live, else fail
+    local pid pgid end
+    [[ -f $STATE ]] || return 1
+    # shellcheck disable=SC1090
+    . "$STATE" 2>/dev/null || return 1
+    if kill -0 "$pid" 2>/dev/null; then echo "$pgid"; return 0; fi
+    rm -f "$STATE"                  # stale: holder died, inhibitor already gone
+    return 1
+}
+
+# ---- internal: the process that holds the inhibitor for the whole window ----
+if [[ ${1:-} == __hold ]]; then
+    secs=$2; end=$3
+    trap 'rm -f "$STATE"; note "☕ afk cancelled" "hypridle is back in charge."; exit 0' TERM INT
+    printf 'pid=%s\npgid=%s\nend=%s\n' \
+        "$$" "$(ps -o pgid= -p $$ | tr -d ' ')" "$end" > "$STATE"
+
+    # idle  -> stops hypridle's dim / dpms-off / lock / suspend listeners
+    # sleep -> stops anything else asking logind to suspend
+    # handle-lid-switch -> closing the lid does nothing
+    if ((secs > 0)); then
+        systemd-inhibit --what=idle:sleep:handle-lid-switch \
+            --who=afk --why="afk mode" --mode=block sleep "$secs"
+    else
+        systemd-inhibit --what=idle:sleep:handle-lid-switch \
+            --who=afk --why="afk mode" --mode=block sleep infinity
+    fi
+
+    rm -f "$STATE"
+    note "☕ afk window over" "hypridle is back in charge."
+    exit 0
+fi
+
+# ---- status ----
+status() {
+    local pid pgid end left
+    if [[ -f $STATE ]] && active_pgid >/dev/null; then
+        # shellcheck disable=SC1090
+        . "$STATE"
+        if ((end == 0)); then
+            echo "☕ afk ACTIVE — no time limit (ends on \`suspend\` or \`afk off\`)"
+        else
+            left=$((end - $(date +%s)))
+            ((left < 0)) && left=0
+            echo "☕ afk ACTIVE — $(fmt "$left") left"
+        fi
+        echo "   blocked: dim, screen-off, lock, suspend, lid-close"
+    else
+        echo "💤 afk off — hypridle normal (dim 2.5m, lock 5.5m, suspend 10m)"
+    fi
+}
+
+# ---- cancel ----
+stop() {
+    local pgid
+    if ! pgid=$(active_pgid); then
+        echo "💤 afk was not active"
+        return 0
+    fi
+    kill -TERM -"$pgid" 2>/dev/null || true
+    for _ in {1..20}; do [[ -f $STATE ]] || break; sleep 0.05; done
+    rm -f "$STATE"
+    echo "💤 afk off — hypridle is back in charge"
+}
+
+# ---- start ----
+start() {
+    local dur=$1 blank=$2 secs end
+    if active_pgid >/dev/null; then
+        echo "afk is already running — \`afk off\` first to change the window." >&2
+        status
+        return 1
+    fi
+    if ! secs=$(parse_dur "$dur"); then
+        echo "afk: can't read duration '$dur' (try 9h, 45m, 1h30m, 90s, or 'on')" >&2
+        return 1
+    fi
+    ((secs == 0)) && end=0 || end=$(( $(date +%s) + secs ))
+
+    setsid --fork "$0" __hold "$secs" "$end" >/dev/null 2>&1
+    for _ in {1..20}; do [[ -f $STATE ]] && break; sleep 0.05; done
+    if ! active_pgid >/dev/null; then
+        echo "afk: failed to take the inhibitor" >&2
+        return 1
+    fi
+
+    if ((secs == 0)); then
+        echo "☕ afk ACTIVE — no time limit"
+        note "☕ afk on" "Awake until you type \`suspend\`."
+    else
+        echo "☕ afk ACTIVE — $(fmt "$secs")  (until $(date -d "@$end" '+%H:%M'))"
+        note "☕ afk — $(fmt "$secs")" "Awake until $(date -d "@$end" '+%H:%M'), or type \`suspend\`."
+    fi
+    echo "   blocked: dim, screen-off, lock, suspend, lid-close"
+
+    if [[ $blank == 1 ]]; then
+        hyprctl dispatch dpms off >/dev/null 2>&1 || true
+        echo "   screen blanked (any keypress wakes it; system stays up)"
+    fi
+}
+
+# ---- arg handling ----
+dur=""; blank=0
+for a in "$@"; do
+    case $a in
+        -b|--blank) blank=1 ;;
+        -h|--help) sed -n '2,13p' "$0" | sed 's/^# \?//'; exit 0 ;;
+        *) dur=$a ;;
+    esac
+done
+
+case "${dur:-}" in
+    "")            status ;;
+    off|stop|end)  stop ;;
+    status)        status ;;
+    *)             start "$dur" "$blank" ;;
+esac

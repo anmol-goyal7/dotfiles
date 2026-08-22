@@ -155,6 +155,13 @@ alias remove='sudo pacman -Rs'
 alias search='pacman -Ss'
 alias hyprland='start-hyprland'   # 0.56+ watchdog launcher; bare binary warns at startup
 
+# AFK mode — `afk 9h` blocks dim/lock/suspend/lid-close; `suspend` ends the
+# window and hands control back to hypridle. It does NOT sleep the laptop.
+# zsh functions beat builtins, so this shadows the builtin `suspend`.
+suspend() { afk off "$@" }
+alias zsuspend='builtin suspend'   # the original: suspend the shell itself
+alias sleepnow='systemctl suspend' # actually put the laptop to sleep, right now
+
 # Taskwarrior
 today() {
   task due:today list
