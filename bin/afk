@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # afk — keep the laptop fully awake for a set window.
-#   afk 9h        no dim, no screen-off, no lock, no suspend; lid-close does nothing
-#   afk 45m -b    same, but blank the screen right away (saves power while you're gone)
+#   afk 9h        no dim, no lock, no suspend; lid-close does nothing
+#   afk 45m -b    same, but blank the screen right away
 #   afk on        same, with no time limit — until `afk off` or `suspend`
 #   afk           show status
 #   afk off       cancel now, hand control back to hypridle
+#
+# The screen still blanks after 5 min idle and wakes on any keypress. That is
+# deliberate: the panel is OLED, and a lit static desktop is what burns it in.
+# The machine itself stays up the whole window.
 #
 # Durations: 9h | 45m | 90s | 1h30m | bare number = minutes.
 # `suspend` (zsh function in ~/.zshrc) is an alias for `afk off` — it ends the
@@ -57,14 +61,19 @@ if [[ ${1:-} == __hold ]]; then
     printf 'pid=%s\npgid=%s\nend=%s\n' \
         "$$" "$(ps -o pgid= -p $$ | tr -d ' ')" "$end" > "$STATE"
 
-    # idle  -> stops hypridle's dim / dpms-off / lock / suspend listeners
+    # NOTE: `idle` is deliberately NOT inhibited. It used to be, but a logind
+    # idle inhibitor makes hypridle skip *every* listener -- dpms-off included
+    # ("Ignoring from onIdled(), inhibit locks: 1") -- so the OLED panel sat lit
+    # and static for the whole window. hypridle's dim/lock/suspend listeners now
+    # carry `condition_cmd = afk __idle-ok` instead, which blocks exactly those
+    # three while a window is live and leaves dpms-off free to blank the screen.
     # sleep -> stops anything else asking logind to suspend
     # handle-lid-switch -> closing the lid does nothing
     if ((secs > 0)); then
-        systemd-inhibit --what=idle:sleep:handle-lid-switch \
+        systemd-inhibit --what=sleep:handle-lid-switch \
             --who=afk --why="afk mode" --mode=block sleep "$secs"
     else
-        systemd-inhibit --what=idle:sleep:handle-lid-switch \
+        systemd-inhibit --what=sleep:handle-lid-switch \
             --who=afk --why="afk mode" --mode=block sleep infinity
     fi
 
@@ -86,9 +95,10 @@ status() {
             ((left < 0)) && left=0
             echo "☕ afk ACTIVE — $(fmt "$left") left"
         fi
-        echo "   blocked: dim, screen-off, lock, suspend, lid-close"
+        echo "   blocked: dim, lock, suspend, lid-close"
+        echo "   screen still blanks after 5m idle (OLED), wakes on keypress"
     else
-        echo "💤 afk off — hypridle normal (dim 2.5m, lock 5.5m, suspend 10m)"
+        echo "💤 afk off — hypridle normal (dim 2.5m, screen off 5m, lock 5.5m, suspend 10m)"
     fi
 }
 
@@ -133,7 +143,8 @@ start() {
         echo "☕ afk ACTIVE — $(fmt "$secs")  (until $(date -d "@$end" '+%H:%M'))"
         note "☕ afk — $(fmt "$secs")" "Awake until $(date -d "@$end" '+%H:%M'), or type \`suspend\`."
     fi
-    echo "   blocked: dim, screen-off, lock, suspend, lid-close"
+    echo "   blocked: dim, lock, suspend, lid-close"
+    echo "   screen still blanks after 5m idle (OLED), wakes on keypress"
 
     if [[ $blank == 1 ]]; then
         hyprctl dispatch dpms off >/dev/null 2>&1 || true
@@ -146,13 +157,17 @@ dur=""; blank=0
 for a in "$@"; do
     case $a in
         -b|--blank) blank=1 ;;
-        -h|--help) sed -n '2,13p' "$0" | sed 's/^# \?//'; exit 0 ;;
+        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \?//'; exit 0 ;;
         *) dur=$a ;;
     esac
 done
 
 case "${dur:-}" in
     "")            status ;;
+    # Called by hypridle's `condition_cmd` on the dim/lock/suspend listeners.
+    # exit 0 = no window live, let the listener fire. exit 1 = afk is on, skip it.
+    # Kept silent and cheap; hypridle runs it on every idle timeout.
+    __idle-ok)     active_pgid >/dev/null 2>&1 && exit 1 || exit 0 ;;
     off|stop|end)  stop ;;
     status)        status ;;
     *)             start "$dur" "$blank" ;;

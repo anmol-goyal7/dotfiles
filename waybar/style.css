@@ -1,6 +1,8 @@
 /* =================================================================
    WAYBAR — Tokyo Night OLED
-   Pure black background, minimal, battery-friendly
+   Pure black background, minimal, battery-friendly.
+   Panel is a Samsung ATNA40YK11 (OLED): keep filled backgrounds dark and let
+   colour live in the text, so nothing static sits lit at fixed pixels.
    ================================================================= */
 
 * {
@@ -44,9 +46,16 @@ tooltip {
   color: #c0caf5;
 }
 
+/* OLED: this used to be a solid #7aa2f7 fill. A saturated block of blue parked
+   at fixed pixels for the whole uptime is the worst thing you can put on an
+   OLED -- blue subpixels lose brightness fastest. Same signal, a fraction of
+   the lit area: transparent chip, blue glyph, 2px underline. The underline is
+   an inset shadow rather than a border so it does not change button metrics,
+   and if GTK ever drops it the blue text alone still reads as active. */
 #workspaces button.active {
-  background: #7aa2f7;
-  color: #000000;
+  background: transparent;
+  color: #7aa2f7;
+  box-shadow: inset 0 -2px 0 #7aa2f7;
 }
 
 #workspaces button.urgent {

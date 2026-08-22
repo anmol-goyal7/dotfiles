@@ -5,7 +5,7 @@
 My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 
 1. **No trackpad.** Vim motions everywhere: window focus, resize, move, a resize submap with a visual border indicator, and `ydotool` for the rare click nothing else can replace.
-2. **OLED battery discipline.** Pure-black Tokyo Night theme across the bar, terminal, and notifications. No wallpaper daemon — the compositor paints solid black (`misc:background_color`). Fewer pixels lit, fewer daemons running.
+2. **OLED discipline.** Pure-black Tokyo Night theme across the bar, terminal, and notifications. No wallpaper daemon — the compositor paints solid black (`misc:background_color`). Colour lives in text rather than in filled backgrounds, so nothing bright sits parked at fixed pixels. The screen always blanks after 5 min idle — `afk` cannot override that, only the lock and suspend steps. Fewer pixels lit, fewer daemons running, and a panel that ages slowly.
 
 ## Components
 
