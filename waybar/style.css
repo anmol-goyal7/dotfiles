@@ -5,6 +5,15 @@
    colour live in the text, so nothing static sits lit at fixed pixels.
    ================================================================= */
 
+/* OLED pixel-shift. bin/waybar-pixelshift rewrites shift.css every few
+   minutes with a 0-3px offset so the clock and tray icons do not sit on the
+   same subpixels all uptime, then rewrites THIS file byte-for-byte to trip
+   waybar's watcher (waybar watches this file only, never its imports).
+   shift.css is generated and gitignored -- install.sh seeds it and the daemon
+   recreates it each tick. It must exist: GTK discards the entire stylesheet
+   if an @import target is missing and the bar falls back to unstyled grey. */
+@import url("shift.css");
+
 * {
   font-family: "FantasqueSansM Nerd Font Mono", "Material Symbols Rounded", sans-serif;
   font-size: 14px;

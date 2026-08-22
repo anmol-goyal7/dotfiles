@@ -5,7 +5,7 @@
 My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 
 1. **No trackpad.** Vim motions everywhere: window focus, resize, move, a resize submap with a visual border indicator, and `ydotool` for the rare click nothing else can replace.
-2. **OLED discipline.** Pure-black Tokyo Night theme across the bar, terminal, and notifications. No wallpaper daemon — the compositor paints solid black (`misc:background_color`). Colour lives in text rather than in filled backgrounds, so nothing bright sits parked at fixed pixels. The screen always blanks after 5 min idle — `afk` cannot override that, only the lock and suspend steps. Fewer pixels lit, fewer daemons running, and a panel that ages slowly.
+2. **OLED discipline.** Pure-black Tokyo Night theme across the bar, terminal, and notifications. No wallpaper daemon — the compositor paints solid black (`misc:background_color`). Colour lives in text rather than in filled backgrounds, so nothing bright sits parked at fixed pixels. The screen always blanks after 5 min idle — `afk` cannot override that, only the lock and suspend steps. `bin/waybar-pixelshift` walks the bar's contents around a 4x3 pixel grid so the clock and tray icons never sit on the same subpixels for a whole uptime. Fewer pixels lit, fewer daemons running, and a panel that ages slowly.
 
 ## Components
 
@@ -34,12 +34,13 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 - **Screenshots** — hyprshot region/window/output, saved to `~/Pictures/Screenshots` and copied to the clipboard.
 - **System toggles without a mouse** — Wi-Fi `SUPER+F5`, Bluetooth `SUPER+F6`, mute `SUPER+F7`, airplane mode `SUPER+F8`.
 - **Notifications** — `SUPER+`` ` `` toggles the SwayNC panel, `SUPER+SHIFT+`` ` `` clears.
+- **OLED pixel-shift** — the bar's contents drift 0–3px every 10 minutes, via a flash-free waybar style reload you will not notice.
 
 ## Layout
 
 ```
 .
-├── bin/            power-mode scripts (saver / balance / performance / powermode)
+├── bin/            power modes, `afk` keep-awake, focus modes, waybar pixel-shift
 ├── etc/sudoers.d/  scoped NOPASSWD rules the power scripts need
 ├── hypr/           hyprland.conf + UserConfigs/ (keybinds, env, rules, startup)
 │   ├── scripts/    helper scripts (refresh, screenshots, toggles, gamemode…)

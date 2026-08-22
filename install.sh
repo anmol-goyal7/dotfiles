@@ -53,6 +53,11 @@ link "$DOTFILES/clangd"         "$CONFIG/clangd"
 link "$DOTFILES/zsh/zshrc"      "$HOME/.zshrc"
 link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 
+# waybar/style.css @imports shift.css, which bin/waybar-pixelshift generates.
+# GTK drops the whole stylesheet if that import is missing, so seed it now
+# rather than letting a fresh clone come up with an unstyled grey bar.
+"$DOTFILES/bin/waybar-pixelshift" --once && ok "Seeded waybar/shift.css (OLED pixel-shift)"
+
 echo ""
 info "All done! Next steps:"
 echo ""
