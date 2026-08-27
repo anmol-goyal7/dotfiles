@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=cmus
+GenericName=Music Player
+Comment=Curses-based music player
+Icon=multimedia-audio-player
+Exec=cmus-open %F
+Terminal=false
+Categories=AudioVideo;Audio;Player;ConsoleOnly;
+Keywords=music;audio;player;
+NoDisplay=false
+MimeType=audio/mpeg;audio/mp3;audio/x-mp3;audio/mpegurl;audio/x-mpegurl;audio/flac;audio/x-flac;audio/ogg;audio/x-ogg;audio/vorbis;audio/x-vorbis+ogg;audio/opus;audio/x-opus+ogg;audio/wav;audio/x-wav;audio/x-wavpack;audio/mp4;audio/m4a;audio/x-m4a;audio/aac;audio/aacp;audio/x-aac;audio/webm;audio/x-ms-wma;audio/x-musepack;audio/x-ape;audio/aiff;audio/x-aiff;audio/x-scpls;audio/x-modplug;

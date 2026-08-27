@@ -1,0 +1,26 @@
+# cmus config — set up 2026-08-27
+
+# Scan the music library on every start (fast, dedupes automatically)
+add ~/Music
+
+# Start in the artist/album library view
+view tree
+
+# Keep playing through the library instead of stopping at the end of an album
+set continue=true
+set play_library=true
+
+# Audio out via PipeWire's pulse shim
+set output_plugin=pulse
+
+# --- extra keybinding (all defaults still work) ---
+# R = repeat just the current track (cmus has no default key for this)
+bind -f common R toggle repeat_current
+
+# --- always-visible key hints in the status line ---
+# This is the stock statusline with a literal cheatsheet spliced into the dead
+# space before %= (the left/right split). Kept short on purpose: cmus truncates
+# this line rather than wrapping, and the right-hand side holds the volume and
+# the continue/follow/repeat/shuffle flags, which must not get cut off when the
+# window is tiled. Press 7 for the full binding list.
+set format_statusline= %{status} %{?show_playback_position?%{position} %{?duration?/ %{duration} }?%{?duration?%{duration} }}%{?bpm>0?at %{bpm} BPM }%{?stream?buf: %{buffer} }%{?show_current_bitrate & bitrate>=0? %{bitrate} kbps }| r:loop R:loop-1 s:shuf 7:keys %= %{?repeat_current?repeat current?%{?play_library?%{?playlist_mode!="all"?%{playlist_mode} from }%{?play_sorted?sorted }library?playlist}} | %{?volume>=0?%{?lvolume!=rvolume?%{lvolume}%% %{rvolume}?%{volume}}%% | }%1{continue}%1{follow}%1{repeat}%1{shuffle} 

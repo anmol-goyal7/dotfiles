@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# ytm — download audio from a URL into ~/Music, tagged and ready for cmus.
+# Set up 2026-08-27.
+#
+#   ytm <url> [more urls...]     download best-quality audio (native codec, no re-encode)
+#   ytm --mp3 <url>              force mp3 (for car stereos / phones / dumb players)
+#   ytm --playlist <url>         allow a full playlist (single video is the default)
+#
+# Downloads land in ~/Music and cmus picks them up on its next start
+# (or press 'u' inside cmus to rescan immediately).
+
+set -euo pipefail
+
+MUSIC_DIR="${MUSIC_DIR:-$HOME/Music}"
+fmt_args=(-f "bestaudio/best" --extract-audio --audio-format best)
+noplaylist="--no-playlist"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  --mp3)
+    fmt_args=(-f "bestaudio/best" --extract-audio --audio-format mp3 --audio-quality 0)
+    shift
+    ;;
+  --playlist)
+    noplaylist="--yes-playlist"
+    shift
+    ;;
+  -h | --help)
+    sed -n '2,10p' "$0" | sed 's/^# \?//'
+    exit 0
+    ;;
+  --)
+    shift
+    break
+    ;;
+  -*)
+    echo "ytm: unknown option '$1' (try --help)" >&2
+    exit 1
+    ;;
+  *) break ;;
+  esac
+done
+
+if [[ $# -eq 0 ]]; then
+  echo "ytm: no URL given (try --help)" >&2
+  exit 1
+fi
+
+mkdir -p "$MUSIC_DIR"
+
+yt-dlp \
+  "${fmt_args[@]}" \
+  $noplaylist \
+  --embed-thumbnail \
+  --embed-metadata \
+  --add-metadata \
+  --no-overwrites \
+  --continue \
+  --ignore-errors \
+  --paths "$MUSIC_DIR" \
+  --output "%(track,title)s.%(ext)s" \
+  --restrict-filenames \
+  "$@"
+
+# Nudge cmus to rescan if it happens to be running
+if cmus-remote -Q >/dev/null 2>&1; then
+  cmus-remote -C "add $MUSIC_DIR" || true
+  echo "ytm: cmus library refreshed"
+fi
+
+echo "ytm: done -> $MUSIC_DIR"

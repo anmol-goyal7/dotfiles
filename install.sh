@@ -50,6 +50,14 @@ link "$DOTFILES/qutebrowser"    "$CONFIG/qutebrowser"
 link "$DOTFILES/zathura"        "$CONFIG/zathura"
 link "$DOTFILES/nvim"           "$CONFIG/nvim"
 link "$DOTFILES/clangd"         "$CONFIG/clangd"
+# cmus: only the rc is linked, so cmus's runtime state (cache, lib.pl, saved
+# playlists) stays out of the repo instead of landing in it as untracked noise.
+link "$DOTFILES/cmus/rc"        "$CONFIG/cmus/rc"
+
+# cmus ships no .desktop file and takes no file arguments, so being the default
+# audio handler needs this entry plus bin/cmus-open.
+link "$DOTFILES/applications/cmus.desktop" "$HOME/.local/share/applications/cmus.desktop"
+
 link "$DOTFILES/zsh/zshrc"      "$HOME/.zshrc"
 link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 
@@ -57,6 +65,22 @@ link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 # GTK drops the whole stylesheet if that import is missing, so seed it now
 # rather than letting a fresh clone come up with an unstyled grey bar.
 "$DOTFILES/bin/waybar-pixelshift" --once && ok "Seeded waybar/shift.css (OLED pixel-shift)"
+
+# Make cmus the default player for every audio type. Kept here rather than in a
+# tracked mimeapps.list, because that file also holds unrelated browser/PDF
+# defaults that shouldn't be stomped on a fresh install.
+if command -v xdg-mime >/dev/null 2>&1; then
+  update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+  for _m in audio/mpeg audio/mp3 audio/x-mp3 audio/flac audio/x-flac audio/ogg \
+    audio/x-ogg audio/vorbis audio/x-vorbis+ogg audio/opus audio/x-opus+ogg \
+    audio/wav audio/x-wav audio/x-wavpack audio/mp4 audio/m4a audio/x-m4a \
+    audio/aac audio/aacp audio/x-aac audio/webm audio/x-ms-wma \
+    audio/x-musepack audio/x-ape audio/aiff audio/x-aiff audio/mpegurl \
+    audio/x-mpegurl audio/x-scpls; do
+    xdg-mime default cmus.desktop "$_m" 2>/dev/null || true
+  done
+  ok "cmus set as default audio player"
+fi
 
 echo ""
 info "All done! Next steps:"
@@ -67,6 +91,7 @@ echo "          zsh zsh-autosuggestions zsh-syntax-highlighting zsh-completions 
 echo "          zoxide fzf fd ripgrep tmux neovim lazygit yazi ueberzugpp \\"
 echo "          ffmpegthumbnailer poppler qutebrowser zathura zathura-pdf-mupdf \\"
 echo "          btop cliphist wl-clipboard grim slurp tesseract ydotool tlp \\"
+echo "          cmus opusfile yt-dlp ffmpeg python-mutagen atomicparsley \\"
 echo "          brightnessctl pavucontrol blueman network-manager-applet \\"
 echo "          hyprpolkitagent ttf-fantasque-nerd ttf-hack ttf-jetbrains-mono"
 echo ""

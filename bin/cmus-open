@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# cmus-open — open audio files in cmus, starting it in a terminal if needed.
+# Set up 2026-08-27. This exists because cmus accepts no file arguments of its
+# own (`cmus foo.mp3` is not a thing) and ships no .desktop file, so it can't be
+# a MIME handler without a wrapper.
+#
+#   cmus-open FILE...    play the first file, queue the rest
+#   cmus-open DIR        add the directory and play it
+
+set -uo pipefail
+
+TERM_CMD="${TERMINAL:-kitty}"
+command -v "$TERM_CMD" >/dev/null 2>&1 || TERM_CMD=foot
+
+cmus_running() { cmus-remote -Q >/dev/null 2>&1; }
+
+# Start cmus detached in a terminal and wait for its socket to accept commands
+start_cmus() {
+  setsid "$TERM_CMD" --class cmus -e cmus >/dev/null 2>&1 &
+  for _ in $(seq 1 60); do
+    cmus_running && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
+if ! cmus_running; then
+  if ! start_cmus; then
+    command -v notify-send >/dev/null 2>&1 &&
+      notify-send -e -u critical "cmus" "Failed to start (terminal: $TERM_CMD)"
+    echo "cmus-open: cmus did not come up" >&2
+    exit 1
+  fi
+fi
+
+# No arguments: just bring cmus up (already done above)
+[[ $# -eq 0 ]] && exit 0
+
+first=1
+for arg in "$@"; do
+  # Turn file:// URIs and relative paths into absolute paths
+  case "$arg" in
+  file://*) arg="${arg#file://}"; arg=$(printf '%b' "${arg//%/\\x}") ;;
+  esac
+  [[ -e "$arg" ]] && arg=$(realpath -- "$arg")
+
+  # Make it visible in the library view as well as playing it
+  cmus-remote -- "$arg" >/dev/null 2>&1
+
+  if [[ $first -eq 1 ]]; then
+    cmus-remote -f "$arg" >/dev/null 2>&1
+    first=0
+  else
+    cmus-remote -q -- "$arg" >/dev/null 2>&1
+  fi
+done
