@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# zen — lock-in focus mode (Super+F5).
+#
+#   zen           toggle the mode
+#   zen on        enter
+#   zen off       leave
+#   zen status    print "on <title>" or "off"
+#
+# While zen is on:
+#
+#   * Every global bind whose dispatcher moves, resizes, floats or reorders a
+#     window is unbound — Super+drag included — so the window you are working in
+#     cannot be shoved around. Focus (Super+hjkl), workspace switching and every
+#     launcher still work. Fullscreen is deliberately left alone: it helps you
+#     concentrate rather than letting you fiddle with the layout.
+#
+#   * The bind list is read from `hyprctl binds -j` rather than hardcoded, so
+#     binds added later are covered without touching this script. Leaving the
+#     mode restores them with `hyprctl reload config-only`, which re-reads them
+#     from the config files — a half-applied unbind can never strand you without
+#     keys, and the border colour comes back from config in the same pass.
+#
+#   * swaync do-not-disturb goes on. Critical notifications still come through
+#     (verified against swaync 0.12.6), which is exactly how the low battery
+#     warning — bin/battery-low-warning, sent at critical urgency — stays
+#     visible while everything else stays quiet.
+#
+#   * The active border turns purple, distinct from the resize submap's red.
+
+set -u
+
+STATE="${XDG_RUNTIME_DIR:-/tmp}/zen-mode.state"
+BORDER='rgba(bb9af7ff)'
+
+# Dispatchers that change where a window sits or how big it is. `mouse` and
+# `submap` need their argument inspected too, so they are handled separately.
+BLOCKED='movewindow|movewindoworgroup|swapwindow|resizeactive|moveactive'
+BLOCKED+='|movewindowpixel|resizewindowpixel|centerwindow|togglefloating'
+BLOCKED+='|setfloating|pin|movetoworkspace|movetoworkspacesilent'
+BLOCKED+='|movecurrentworkspacetomonitor|swapactiveworkspaces|workspaceopt'
+BLOCKED+='|layoutmsg|pseudo|togglegroup'
+
+need_hypr() {
+    if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+        echo "zen: needs a running Hyprland session" >&2
+        exit 1
+    fi
+}
+
+note() { command -v notify-send >/dev/null && notify-send -a zen "$@" >/dev/null 2>&1 || true; }
+
+# One TSV row per global bind: mods, key, blocked?, and the line that would
+# recreate it. Submap-scoped binds are left alone — blocking entry to a submap
+# is enough, and unbinding inside one needs a different context.
+binds_tsv() {
+    hyprctl binds -j | jq -r --arg blocked "$BLOCKED" '
+      def modstr($m): [
+        {b:1,n:"SHIFT"},{b:2,n:"CAPS"},{b:4,n:"CTRL"},{b:8,n:"ALT"},
+        {b:16,n:"MOD2"},{b:32,n:"MOD3"},{b:64,n:"SUPER"},{b:128,n:"MOD5"}
+      ] | map(select((($m / .b) | floor) % 2 == 1) | .n) | join(" ");
+
+      .[] | select(.submap == "")
+      | (modstr(.modmask))                                            as $mods
+      | (if .keycode != 0 then "code:\(.keycode)" else .key end)      as $key
+      | ((.dispatcher | test("^(" + $blocked + ")$"))
+         or (.dispatcher == "mouse"  and (.arg | test("^(movewindow|resizewindow)$")))
+         or (.dispatcher == "submap" and .arg != "reset"))            as $block
+      | ((if .locked then "l" else "" end) + (if .release then "r" else "" end)
+        + (if .repeat then "e" else "" end) + (if .mouse then "m" else "" end)
+        + (if .non_consuming then "n" else "" end))                   as $flags
+      | [ $mods, $key, ($block | tostring), .dispatcher,
+          "bind\($flags) = \($mods), \($key), \(.dispatcher)"
+            + (if .arg == "" then "" else ", \(.arg)" end)
+        ] | @tsv'
+}
+
+# Unbind every key group that holds at least one movement bind. A group is
+# unbound as many times as it has binds (Super+R carries both the submap entry
+# and the exec that reddens the border), then the non-movement binds in that
+# group are put back — so Super+P keeps launching zapzap even though it shares
+# a key with `pseudo`.
+#
+# A key that opens a submap is the exception: Super+R both enters the resize
+# submap and reddens the border to advertise it, and re-adding that exec alone
+# would leave a red border with no submap to escape from. So a group whose
+# blocked bind is a submap entry is dropped whole.
+lock_binds() {
+    local -A total blocked submap_entry
+    local -a rows
+    local row mods key blk disp line g batch='' i
+
+    mapfile -t rows < <(binds_tsv)
+    for row in "${rows[@]}"; do
+        IFS=$'\t' read -r mods key blk disp line <<<"$row"
+        g="$mods|$key"
+        total[$g]=$(( ${total[$g]:-0} + 1 ))
+        if [[ $blk == true ]]; then
+            blocked[$g]=1
+            [[ $disp == submap ]] && submap_entry[$g]=1
+        fi
+    done
+
+    (( ${#blocked[@]} )) || return 0
+
+    for g in "${!blocked[@]}"; do
+        mods=${g%%|*}; key=${g##*|}
+        for ((i = 0; i < ${total[$g]}; i++)); do
+            batch+="keyword unbind $mods, $key ; "
+        done
+    done
+    hyprctl --batch "$batch" >/dev/null
+
+    # Restored one at a time, not in the batch: an exec argument may contain the
+    # semicolon --batch splits on.
+    for row in "${rows[@]}"; do
+        IFS=$'\t' read -r mods key blk disp line <<<"$row"
+        g="$mods|$key"
+        [[ $blk == false && -n ${blocked[$g]:-} && -z ${submap_entry[$g]:-} ]] || continue
+        hyprctl keyword "$line" >/dev/null
+    done
+}
+
+zen_on() {
+    if [[ -r $STATE ]]; then
+        echo "zen: already on" >&2
+        return 0
+    fi
+
+    local addr title dnd
+    addr=$(hyprctl activewindow -j | jq -r '.address // ""')
+    title=$(hyprctl activewindow -j | jq -r '.title // "the desktop"')
+    dnd=$(swaync-client -D 2>/dev/null || echo false)
+
+    # Sent before do-not-disturb goes on, so it is the last thing you see.
+    note "zen on" "layout locked — $title"
+
+    lock_binds
+    hyprctl keyword general:col.active_border "$BORDER" >/dev/null
+    command -v swaync-client >/dev/null && swaync-client -dn >/dev/null 2>&1
+
+    printf '%s\n%s\n%s\n' "$addr" "$dnd" "$title" >"$STATE"
+}
+
+zen_off() {
+    if [[ ! -r $STATE ]]; then
+        echo "zen: not on" >&2
+        return 0
+    fi
+
+    local addr dnd title
+    { read -r addr; read -r dnd; read -r title; } <"$STATE" || true
+    rm -f "$STATE"
+
+    # Re-reads every bind and the border colour straight from the config files.
+    hyprctl reload config-only >/dev/null
+
+    # Only lift do-not-disturb if zen was what turned it on — dsa mode and pomo
+    # use it too, and one of them may still be running.
+    if [[ ${dnd:-false} != true ]] && command -v swaync-client >/dev/null; then
+        swaync-client -df >/dev/null 2>&1
+    fi
+
+    note "zen off" "layout unlocked"
+}
+
+status() {
+    if [[ -r $STATE ]]; then
+        local addr dnd title
+        { read -r addr; read -r dnd; read -r title; } <"$STATE" || true
+        echo "on ${title:-?}"
+    else
+        echo "off"
+    fi
+}
+
+case ${1:-} in
+    '')       need_hypr; if [[ -r $STATE ]]; then zen_off; else zen_on; fi ;;
+    on)       need_hypr; zen_on ;;
+    off)      need_hypr; zen_off ;;
+    status)   status ;;
+    *)        echo "usage: zen [on|off|status]" >&2; exit 2 ;;
+esac
