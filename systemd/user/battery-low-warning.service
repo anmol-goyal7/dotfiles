@@ -1,0 +1,13 @@
+[Unit]
+Description=Low battery warning that clears itself when the charger goes in
+
+[Service]
+Type=simple
+# --watch blocks on upower events, so this idles rather than polling. It
+# replaces the every-60s timer this repo used to ship.
+ExecStart=%h/.local/bin/battery-low-warning --watch
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

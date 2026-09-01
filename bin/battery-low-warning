@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# battery-low-warning — warn once when the battery gets low, and take the
+# warning back down the moment the charger goes in.
+#
+#   battery-low-warning           run one check and exit
+#   battery-low-warning --watch   check on every power event (the systemd service)
+#
+# The warning is sent at critical urgency on purpose. swaync's timeout-critical
+# is 0, so it stays on screen until something dismisses it — you cannot miss it,
+# and it survives do-not-disturb, which is what keeps it visible inside `zen`
+# focus mode while every other notification is muted.
+#
+# The flip side is that nothing ever took it back down: plugging the charger in
+# only rewrote the state file, so a warning from 8% sat there until it was
+# clicked away. So the notification id is now recorded alongside the state and
+# closed over D-Bus as soon as the battery recovers.
+#
+# --watch blocks on `upower --monitor` rather than polling, so the warning
+# clears the instant the plug goes in instead of up to a minute later. The
+# 60-second heartbeat stays as a floor: if upower is missing or its stream
+# dies, this degrades to exactly the polling it used to do.
+
+set -uo pipefail
+
+THRESHOLD=20
+HEARTBEAT=60
+BATTERY=/sys/class/power_supply/BAT1
+STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/battery-low-warning.state"
+
+close_notification() {
+    gdbus call --session \
+        --dest org.freedesktop.Notifications \
+        --object-path /org/freedesktop/Notifications \
+        --method org.freedesktop.Notifications.CloseNotification "$1" \
+        >/dev/null 2>&1 || true
+}
+
+check() {
+    [[ -r $BATTERY/capacity && -r $BATTERY/status ]] || return 0
+
+    local capacity status prev id
+    capacity=$(<"$BATTERY/capacity")
+    status=$(<"$BATTERY/status")
+    case $capacity in '' | *[!0-9]*) return 0 ;; esac
+
+    mkdir -p "$(dirname "$STATE_FILE")"
+
+    # Older state files hold just "low" or "ok"; id comes back empty, which the
+    # branches below already tolerate.
+    prev=ok
+    id=
+    [[ -r $STATE_FILE ]] && read -r prev id <"$STATE_FILE"
+
+    if ((capacity < THRESHOLD)) && [[ $status != Charging && $status != Full ]]; then
+        if [[ $prev != low ]]; then
+            id=$(notify-send -p --urgency=critical --app-name=battery-low-warning \
+                --icon=battery-caution "Low battery" \
+                "Battery is at ${capacity}%. Plug in your charger." 2>/dev/null) || id=
+        fi
+        printf 'low %s\n' "$id" >"$STATE_FILE"
+    else
+        [[ $prev == low && -n $id ]] && close_notification "$id"
+        printf 'ok\n' >"$STATE_FILE"
+    fi
+}
+
+watch_forever() {
+    local rc line
+    if command -v upower >/dev/null; then
+        exec 3< <(exec upower --monitor 2>/dev/null)
+    else
+        exec 3</dev/null
+    fi
+
+    check
+    while :; do
+        read -r -t "$HEARTBEAT" line <&3
+        rc=$?
+        if ((rc > 128)); then
+            : # heartbeat expired — re-check anyway
+        elif ((rc != 0)); then
+            # No upower, or its stream ended. Keep working on the heartbeat
+            # alone; systemd restarts the unit if the process itself dies.
+            exec 3</dev/null
+            sleep "$HEARTBEAT"
+        else
+            # upower emits several events per change; let the burst settle so a
+            # single plug-in does not trigger a handful of checks.
+            while read -r -t 0.3 line <&3; do :; done
+        fi
+        check
+    done
+}
+
+case ${1:-} in
+    '') check ;;
+    --watch) watch_forever ;;
+    *)
+        echo "usage: battery-low-warning [--watch]" >&2
+        exit 2
+        ;;
+esac

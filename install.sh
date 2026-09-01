@@ -58,6 +58,12 @@ link "$DOTFILES/cmus/rc"        "$CONFIG/cmus/rc"
 # audio handler needs this entry plus bin/cmus-open.
 link "$DOTFILES/applications/cmus.desktop" "$HOME/.local/share/applications/cmus.desktop"
 
+# The low-battery warning runs as a systemd user service, which does not see
+# the interactive shell's PATH, so the script needs a stable home of its own.
+link "$DOTFILES/bin/battery-low-warning" "$HOME/.local/bin/battery-low-warning"
+link "$DOTFILES/systemd/user/battery-low-warning.service" \
+     "$CONFIG/systemd/user/battery-low-warning.service"
+
 link "$DOTFILES/zsh/zshrc"      "$HOME/.zshrc"
 link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 
@@ -65,6 +71,16 @@ link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 # GTK drops the whole stylesheet if that import is missing, so seed it now
 # rather than letting a fresh clone come up with an unstyled grey bar.
 "$DOTFILES/bin/waybar-pixelshift" --once && ok "Seeded waybar/shift.css (OLED pixel-shift)"
+
+# The warning used to be a 60s timer; the service supersedes it and the two
+# would double up on the notification, so retire the timer if it is still there.
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --user disable --now battery-low-warning.timer >/dev/null 2>&1 || true
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  if systemctl --user enable --now battery-low-warning.service >/dev/null 2>&1; then
+    ok "Enabled battery-low-warning.service"
+  fi
+fi
 
 # Make cmus the default player for every audio type. Kept here rather than in a
 # tracked mimeapps.list, because that file also holds unrelated browser/PDF
