@@ -29,11 +29,12 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 - **Vim-motion window control** — `SUPER+hjkl` focus, `SUPER+SHIFT+hjkl` resize, `SUPER+CTRL+hjkl` move, `SUPER+R` enters a resize submap (border turns red until `Esc`).
 - **Keyboard mouse clicks** — `SUPER+CTRL+Space` / `SUPER+CTRL+x` left/right click via ydotool.
 - **Power modes on function keys** — `SUPER+F1..F4` switch battery-saver / balanced / performance profiles (cpupower + Intel P-State + TLP, wired through scoped sudoers rules in `etc/sudoers.d/`).
-- **Zen mode** — `SUPER+F5` locks you into the window you are working in. Entering a `zen` submap makes every global bind inactive at once — no launcher, no workspace switch, no window movement, no `SUPER`+drag; only `SUPER+F5` to leave, the XF86 hardware keys and the lock screen are re-declared inside it. Keybinds are only half of it, so a watcher on Hyprland's event socket snaps focus back when a click or a newly opened window takes it, which also drags you back from another workspace. New-tab and new-window keys are swallowed: `CTRL+SHIFT+T`/`N` and `ALT+TAB` always, and the plain `CTRL+T/N/L/TAB/1-9` group only when the locked window is a browser — in a terminal those are work keys. Notifications go quiet apart from the low-battery warning, which passes do-not-disturb on critical urgency. Border turns purple. It releases itself if the locked window closes, and rebuilds the submap if a config reload wipes it, so neither can lock you out.
+- **Zen mode** — `SUPER+F5` locks you into the window you are working in. Entering a `zen` submap makes every global bind inactive at once — no launcher, no workspace switch, no window movement, no `SUPER`+drag; only `SUPER+F5` to leave, the XF86 hardware keys and the lock screen are re-declared inside it. Keybinds are only half of it, so a watcher on Hyprland's event socket snaps focus back when a click or a newly opened window takes it, which also drags you back from another workspace. New-tab and new-window keys are swallowed: `CTRL+SHIFT+T`/`N` and `ALT+TAB` always, and the plain `CTRL+T/N/L/TAB/1-9` group only when the locked window is a browser — in a terminal those are work keys. Notifications go quiet apart from the low-battery warning, which passes do-not-disturb on critical urgency. Border turns purple. It releases itself if the locked window closes, and rebuilds the submap if a config reload wipes it, so neither can lock you out. Leaving zen re-reads the config to restore the binds, which would otherwise hand the red tint and the current power mode's blur and animation settings back to the config — both live only at runtime — so it snapshots them across the reload.
 - **Low battery warning that goes away** — `bin/battery-low-warning --watch` runs as a systemd user service, blocking on `upower` events rather than polling. The warning is sticky by design (critical urgency, `timeout-critical: 0`), so it records its notification id and closes it over D-Bus the moment the charger goes in.
 - **OCR anywhere** — `SUPER+SHIFT+T` selects a region, runs tesseract, puts the text on the clipboard.
 - **Dropdown terminal** — `SUPER+SHIFT+Return`.
 - **Screenshots** — hyprshot region/window/output, saved to `~/Pictures/Screenshots` and copied to the clipboard.
+- **Red mode** — `SUPER+N`, or `red` / `blue` at a prompt. A fragment shader that drops the green and blue channels outright, so the screen goes fully red for night work. It hangs on `decoration:screen_shader`, which exists only at runtime, so every `hyprctl reload` used to silently drop it — leaving zen mode, leaving game mode, or Hyprland re-reading its own config after an edit. `bin/red` keeps a state file and a `reapply` verb, which those paths call once they are done reloading.
 - **System toggles without a mouse** — Wi-Fi `SUPER+F9`, Bluetooth `SUPER+F6`, mute `SUPER+F7`, airplane mode `SUPER+F8`.
 - **Notifications** — `SUPER+`` ` `` toggles the SwayNC panel, `SUPER+SHIFT+`` ` `` clears.
 - **OLED pixel-shift** — the bar's contents drift 0–3px every 10 minutes, via a flash-free waybar style reload you will not notice.
@@ -42,11 +43,11 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 
 ```
 .
-├── bin/            power modes, `afk` keep-awake, focus modes, battery warning, waybar pixel-shift
+├── bin/            power modes, `afk` keep-awake, focus modes, `red` tint, battery warning, waybar pixel-shift
 ├── etc/sudoers.d/  scoped NOPASSWD rules the power scripts need
 ├── hypr/           hyprland.conf + UserConfigs/ (keybinds, env, rules, startup)
 │   ├── scripts/    helper scripts (refresh, screenshots, toggles, gamemode…)
-│   └── shaders/    red-tint night shader (`red` / `blue` zsh aliases)
+│   └── shaders/    red-tint night shader, driven by `bin/red`
 ├── kitty/          kitty.conf + themes (Tokyo Night OLED, gruvbox)
 ├── nvim/           init.lua, plugins, keymaps (lazy.nvim)
 ├── swaync/         notification center — Tokyo Night OLED
