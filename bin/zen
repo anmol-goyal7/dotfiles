@@ -6,39 +6,48 @@
 #   zen off       leave
 #   zen status    print "on <title>" or "off"
 #
-# While zen is on:
+# This is a lock, not a nudge. While it is on you are held in the one window
+# you started it from: you cannot open another window, tab, app or workspace,
+# and you cannot move or resize what you are working in.
 #
-#   * Every global bind whose dispatcher moves, resizes, floats or reorders a
-#     window is unbound — Super+drag included — so the window you are working in
-#     cannot be shoved around. Focus (Super+hjkl), workspace switching and every
-#     launcher still work. Fullscreen is deliberately left alone: it helps you
-#     concentrate rather than letting you fiddle with the layout.
+# Two mechanisms, because either alone leaks:
 #
-#   * The bind list is read from `hyprctl binds -j` rather than hardcoded, so
-#     binds added later are covered without touching this script. Leaving the
-#     mode restores them with `hyprctl reload config-only`, which re-reads them
-#     from the config files — a half-applied unbind can never strand you without
-#     keys, and the border colour comes back from config in the same pass.
+#   1. A `zen` submap. Entering a submap makes every global bind inactive at
+#      once — launchers, workspace switching, movement, the lot — instead of
+#      unbinding them one at a time. Only what this script re-declares inside
+#      the submap still works: Super+F5 to leave, the XF86 hardware keys
+#      (volume, brightness, media, mic) and the lock-screen bind. Leaving is
+#      `submap reset` + `hyprctl reload config-only`, which re-reads every bind
+#      from the config files, so a botched submap cannot strand you. Hyprland
+#      re-reads its config whenever a config file changes, which would empty
+#      the submap and leave no way out at all, so the watcher rebuilds it on
+#      every `configreloaded`.
 #
-#   * swaync do-not-disturb goes on. Critical notifications still come through
-#     (verified against swaync 0.12.6), which is exactly how the low battery
-#     warning — bin/battery-low-warning, sent at critical urgency — stays
-#     visible while everything else stays quiet.
+#   2. A focus watcher on Hyprland's event socket. Keybinds are only half the
+#      problem — a click on another window, or an app popping one open, would
+#      still move you. The watcher snaps focus straight back to the locked
+#      window, which also drags you back from another workspace, since
+#      `focuswindow` follows the window. It stands down on its own if the
+#      locked window is closed, so quitting the app cannot leave you trapped.
 #
-#   * The active border turns purple, distinct from the resize submap's red.
+# Keys the compositor cannot see the meaning of get swallowed by binding them
+# to a no-op inside the submap. Ctrl+Shift+T/N (new tab, new window in both a
+# browser and kitty) and Alt+Tab go always; the plain Ctrl+T/N/L/Tab/1-9 group
+# only when the locked window is a browser, because in a terminal those are
+# work keys — Ctrl+L clears the screen, Ctrl+N completes in nvim, Ctrl+T is
+# fzf.
+#
+# Notifications go quiet through swaync do-not-disturb. Critical ones still
+# come through (swaync 0.12.6), which is how the low battery warning stays
+# visible — see bin/battery-low-warning.
 
 set -u
 
 STATE="${XDG_RUNTIME_DIR:-/tmp}/zen-mode.state"
+WATCHPID="${XDG_RUNTIME_DIR:-/tmp}/zen-watch.pid"
 BORDER='rgba(bb9af7ff)'
-
-# Dispatchers that change where a window sits or how big it is. `mouse` and
-# `submap` need their argument inspected too, so they are handled separately.
-BLOCKED='movewindow|movewindoworgroup|swapwindow|resizeactive|moveactive'
-BLOCKED+='|movewindowpixel|resizewindowpixel|centerwindow|togglefloating'
-BLOCKED+='|setfloating|pin|movetoworkspace|movetoworkspacesilent'
-BLOCKED+='|movecurrentworkspacetomonitor|swapactiveworkspaces|workspaceopt'
-BLOCKED+='|layoutmsg|pseudo|togglegroup'
+SELF=$(readlink -f "$0")
+BROWSERS='brave|chrome|chromium|firefox|vivaldi|opera|edge|qutebrowser'
 
 need_hypr() {
     if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
@@ -49,75 +58,139 @@ need_hypr() {
 
 note() { command -v notify-send >/dev/null && notify-send -a zen "$@" >/dev/null 2>&1 || true; }
 
-# One TSV row per global bind: mods, key, blocked?, and the line that would
-# recreate it. Submap-scoped binds are left alone — blocking entry to a submap
-# is enough, and unbinding inside one needs a different context.
-binds_tsv() {
-    hyprctl binds -j | jq -r --arg blocked "$BLOCKED" '
+# The binds worth keeping inside the lock: hardware keys, which are not a way
+# to get distracted, and the lock screen. Read from the live config rather than
+# retyped here, so they stay correct if he re-binds them.
+carry_binds() {
+    hyprctl binds -j | jq -r '
       def modstr($m): [
         {b:1,n:"SHIFT"},{b:2,n:"CAPS"},{b:4,n:"CTRL"},{b:8,n:"ALT"},
         {b:16,n:"MOD2"},{b:32,n:"MOD3"},{b:64,n:"SUPER"},{b:128,n:"MOD5"}
       ] | map(select((($m / .b) | floor) % 2 == 1) | .n) | join(" ");
 
       .[] | select(.submap == "")
-      | (modstr(.modmask))                                            as $mods
-      | (if .keycode != 0 then "code:\(.keycode)" else .key end)      as $key
-      | ((.dispatcher | test("^(" + $blocked + ")$"))
-         or (.dispatcher == "mouse"  and (.arg | test("^(movewindow|resizewindow)$")))
-         or (.dispatcher == "submap" and .arg != "reset"))            as $block
+      | select((.key | test("^xf86"; "i")) or (.arg | test("LockScreen|hyprlock")))
       | ((if .locked then "l" else "" end) + (if .release then "r" else "" end)
         + (if .repeat then "e" else "" end) + (if .mouse then "m" else "" end)
-        + (if .non_consuming then "n" else "" end))                   as $flags
-      | [ $mods, $key, ($block | tostring), .dispatcher,
-          "bind\($flags) = \($mods), \($key), \(.dispatcher)"
+        + (if .non_consuming then "n" else "" end))                as $flags
+      | (if .keycode != 0 then "code:\(.keycode)" else .key end)    as $key
+      | [ "bind\($flags)",
+          "\(modstr(.modmask)), \($key), \(.dispatcher)"
             + (if .arg == "" then "" else ", \(.arg)" end)
         ] | @tsv'
 }
 
-# Unbind every key group that holds at least one movement bind. A group is
-# unbound as many times as it has binds (Super+R carries both the submap entry
-# and the exec that reddens the border), then the non-movement binds in that
-# group are put back — so Super+P keeps launching zapzap even though it shares
-# a key with `pseudo`.
-#
-# A key that opens a submap is the exception: Super+R both enters the resize
-# submap and reddens the border to advertise it, and re-adding that exec alone
-# would leave a red border with no submap to escape from. So a group whose
-# blocked bind is a submap entry is dropped whole.
-lock_binds() {
-    local -A total blocked submap_entry
-    local -a rows
-    local row mods key blk disp line g batch='' i
+build_submap() {
+    local class=$1 kw value key
 
-    mapfile -t rows < <(binds_tsv)
-    for row in "${rows[@]}"; do
-        IFS=$'\t' read -r mods key blk disp line <<<"$row"
-        g="$mods|$key"
-        total[$g]=$(( ${total[$g]:-0} + 1 ))
-        if [[ $blk == true ]]; then
-            blocked[$g]=1
-            [[ $disp == submap ]] && submap_entry[$g]=1
-        fi
+    hyprctl keyword submap zen >/dev/null
+
+    # The way out. Nothing else may launch, focus or move anything.
+    hyprctl keyword bind "SUPER, F5, exec, $SELF" >/dev/null
+    # Keyword and value must go as two arguments. Folded into one, the "=" is
+    # read as the first modifier and the bind is dropped — silently, when the
+    # mod list is non-empty enough to hide it.
+    while IFS=$'\t' read -r kw value; do
+        [[ -n $kw ]] && hyprctl keyword "$kw" "$value" >/dev/null
+    done < <(carry_binds)
+
+    # Swallowed keys. `submap, zen` re-enters the submap already active, so it
+    # consumes the key and does nothing — no process spawned per keypress.
+    for key in "CTRL SHIFT, T" "CTRL SHIFT, N" "ALT, Tab"; do
+        hyprctl keyword bind "$key, submap, zen" >/dev/null
     done
 
-    (( ${#blocked[@]} )) || return 0
-
-    for g in "${!blocked[@]}"; do
-        mods=${g%%|*}; key=${g##*|}
-        for ((i = 0; i < ${total[$g]}; i++)); do
-            batch+="keyword unbind $mods, $key ; "
+    if [[ $class =~ ^($BROWSERS) ]]; then
+        for key in "CTRL, T" "CTRL, N" "CTRL, L" "CTRL, Tab" "CTRL SHIFT, Tab" \
+            "CTRL, prior" "CTRL, next" \
+            "CTRL, code:10" "CTRL, code:11" "CTRL, code:12" "CTRL, code:13" \
+            "CTRL, code:14" "CTRL, code:15" "CTRL, code:16" "CTRL, code:17" \
+            "CTRL, code:18"; do
+            hyprctl keyword bind "$key, submap, zen" >/dev/null
         done
-    done
-    hyprctl --batch "$batch" >/dev/null
+    fi
 
-    # Restored one at a time, not in the batch: an exec argument may contain the
-    # semicolon --batch splits on.
-    for row in "${rows[@]}"; do
-        IFS=$'\t' read -r mods key blk disp line <<<"$row"
-        g="$mods|$key"
-        [[ $blk == false && -n ${blocked[$g]:-} && -z ${submap_entry[$g]:-} ]] || continue
-        hyprctl keyword "$line" >/dev/null
-    done
+    hyprctl keyword submap reset >/dev/null
+}
+
+# Snaps focus back to the locked window. Runs detached; `zen off` kills it.
+watch_focus() {
+    echo $$ >"$WATCHPID"
+    exec python3 - "$1" "$SELF" <<'PY'
+import os, socket, subprocess, sys, time
+
+locked, zen = sys.argv[1], sys.argv[2]
+short = locked[2:] if locked.startswith("0x") else locked
+
+path = os.path.join(os.environ["XDG_RUNTIME_DIR"], "hypr",
+                    os.environ["HYPRLAND_INSTANCE_SIGNATURE"], ".socket2.sock")
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect(path)
+
+recent, buf = [], b""
+while True:
+    data = sock.recv(4096)
+    if not data:
+        break
+    buf += data
+    while b"\n" in buf:
+        raw, buf = buf.split(b"\n", 1)
+        event, _, arg = raw.decode("utf-8", "replace").partition(">>")
+        arg = arg.strip()
+        if arg.startswith("0x"):
+            arg = arg[2:]
+
+        # The window went away — release the lock rather than trap him in a
+        # mode whose anchor no longer exists. Detached, so `zen off` killing
+        # this process cannot leave the release half-done.
+        if event == "closewindow" and arg == short:
+            subprocess.Popen([zen, "off"], start_new_session=True)
+            sys.exit(0)
+
+        # A reload wiped the submap out from under us; put it back.
+        if event == "configreloaded":
+            time.sleep(0.3)
+            subprocess.run([zen, "__rearm", locked],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            continue
+
+        if event == "activewindowv2" and arg != short:
+            # Always pull focus back — never skip one, or a steal would stick.
+            # The backoff only exists so a window fighting for focus cannot
+            # turn this into a spin.
+            now = time.monotonic()
+            recent = [t for t in recent if now - t < 2.0]
+            if len(recent) >= 30:
+                time.sleep(0.5)
+                recent.clear()
+            recent.append(now)
+            subprocess.run(["hyprctl", "dispatch", "focuswindow",
+                            "address:" + locked],
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+PY
+}
+
+# Hyprland re-reads its config whenever a config file changes, which throws
+# away a submap built at runtime. Left alone that is a lockout: the compositor
+# would still be *in* the zen submap, but with nothing bound in it — not even
+# the way out. The watcher calls this back on every `configreloaded`.
+rearm() {
+    local addr=$1 class n
+
+    # zen is being torn down (`zen off` removes the state before it reloads);
+    # rebuilding here would fight the release.
+    [[ -r $STATE ]] || return 0
+
+    n=$(hyprctl binds -j | jq '[.[] | select(.submap == "zen")] | length')
+    if ((n == 0)); then
+        class=$(hyprctl clients -j | jq -r --arg a "$addr" \
+            'first(.[] | select(.address == $a) | .class) // ""')
+        build_submap "$class"
+    fi
+    hyprctl --batch "keyword unbind SUPER, mouse:272 ; keyword unbind SUPER, mouse:273" >/dev/null
+    hyprctl keyword general:col.active_border "$BORDER" >/dev/null
+    hyprctl dispatch submap zen >/dev/null
 }
 
 zen_on() {
@@ -126,18 +199,32 @@ zen_on() {
         return 0
     fi
 
-    local addr title dnd
-    addr=$(hyprctl activewindow -j | jq -r '.address // ""')
-    title=$(hyprctl activewindow -j | jq -r '.title // "the desktop"')
+    local win addr title class dnd pid
+    win=$(hyprctl activewindow -j)
+    addr=$(jq -r '.address // ""' <<<"$win")
+    title=$(jq -r '.title // ""' <<<"$win")
+    class=$(jq -r '.class // ""' <<<"$win")
+
+    if [[ -z $addr || $addr == null ]]; then
+        note "zen" "focus a window first — there is nothing to lock onto"
+        echo "zen: no focused window to lock" >&2
+        return 1
+    fi
+
     dnd=$(swaync-client -D 2>/dev/null || echo false)
+    note "zen on" "locked to $title"
 
-    # Sent before do-not-disturb goes on, so it is the last thing you see.
-    note "zen on" "layout locked — $title"
-
-    lock_binds
+    build_submap "$class"
+    # Belt and braces: the submap already makes these inactive, but the mouse
+    # drag binds are the one path that needs no keyboard at all.
+    hyprctl --batch "keyword unbind SUPER, mouse:272 ; keyword unbind SUPER, mouse:273" >/dev/null
     hyprctl keyword general:col.active_border "$BORDER" >/dev/null
-    command -v swaync-client >/dev/null && swaync-client -dn >/dev/null 2>&1
+    hyprctl dispatch submap zen >/dev/null
 
+    rm -f "$WATCHPID"
+    setsid -f "$SELF" __watch "$addr" >/dev/null 2>&1
+
+    command -v swaync-client >/dev/null && swaync-client -dn >/dev/null 2>&1
     printf '%s\n%s\n%s\n' "$addr" "$dnd" "$title" >"$STATE"
 }
 
@@ -147,11 +234,23 @@ zen_off() {
         return 0
     fi
 
-    local addr dnd title
+    local addr dnd title pid
     { read -r addr; read -r dnd; read -r title; } <"$STATE" || true
     rm -f "$STATE"
 
-    # Re-reads every bind and the border colour straight from the config files.
+    # Checked against its cmdline first, so a recycled pid is never the one
+    # that gets killed.
+    if [[ -r $WATCHPID ]]; then
+        read -r pid <"$WATCHPID"
+        if [[ -n ${pid:-} ]] && grep -qa "$SELF" "/proc/$pid/cmdline" 2>/dev/null; then
+            kill "$pid" 2>/dev/null
+        fi
+        rm -f "$WATCHPID"
+    fi
+
+    hyprctl dispatch submap reset >/dev/null
+    # Re-reads the binds and the border colour from the config files, and drops
+    # the submap this script built along the way.
     hyprctl reload config-only >/dev/null
 
     # Only lift do-not-disturb if zen was what turned it on — dsa mode and pomo
@@ -160,7 +259,7 @@ zen_off() {
         swaync-client -df >/dev/null 2>&1
     fi
 
-    note "zen off" "layout unlocked"
+    note "zen off" "unlocked"
 }
 
 status() {
@@ -178,5 +277,7 @@ case ${1:-} in
     on)       need_hypr; zen_on ;;
     off)      need_hypr; zen_off ;;
     status)   status ;;
+    __watch)  watch_focus "${2:?}" ;;
+    __rearm)  rearm "${2:?}" ;;
     *)        echo "usage: zen [on|off|status]" >&2; exit 2 ;;
 esac
