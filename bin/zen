@@ -37,6 +37,10 @@
 # work keys — Ctrl+L clears the screen, Ctrl+N completes in nvim, Ctrl+T is
 # fzf.
 #
+# That reload is also why leaving zen used to take the red tint and the current
+# power mode down with it: it re-reads the config files, and both of those live
+# only at runtime. Zen snapshots them on the way out and puts them back.
+#
 # Notifications go quiet through swaync do-not-disturb. Critical ones still
 # come through (swaync 0.12.6), which is how the low battery warning stays
 # visible — see bin/battery-low-warning.
@@ -48,6 +52,10 @@ WATCHPID="${XDG_RUNTIME_DIR:-/tmp}/zen-watch.pid"
 BORDER='rgba(bb9af7ff)'
 SELF=$(readlink -f "$0")
 BROWSERS='brave|chrome|chromium|firefox|vivaldi|opera|edge|qutebrowser'
+# Options the power-mode scripts set at runtime and no config file mentions.
+# `hyprctl reload` re-reads those files, so leaving zen used to hand blur and
+# animations back to the config and quietly undo saver or game mode.
+PRESERVE=(animations:enabled decoration:blur:enabled)
 
 need_hypr() {
     if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
@@ -57,6 +65,34 @@ need_hypr() {
 }
 
 note() { command -v notify-send >/dev/null && notify-send -a zen "$@" >/dev/null 2>&1 || true; }
+
+# The red tint is lost to a reload the same way, but bin/red owns that one, so
+# ask it to put itself back rather than snapshotting the shader here too.
+# By path, not by name: a Hyprland bind does not run under his shell's PATH.
+red() { "${SELF%/*}/red" "$1" >/dev/null 2>&1 || true; }
+
+opt_get() {
+    hyprctl getoption "$1" -j 2>/dev/null |
+        jq -r '(.str // .int // .float // .custom // "") | tostring'
+}
+
+# "<option>\t<value>" a line, which is also how they sit in the state file.
+snapshot_opts() {
+    local o
+    for o in "${PRESERVE[@]}"; do
+        printf '%s\t%s\n' "$o" "$(opt_get "$o")"
+    done
+}
+
+# Reads that back from stdin and puts back only what the reload actually moved.
+restore_opts() {
+    local o want
+    while IFS=$'\t' read -r o want; do
+        [[ -n $o && -n $want ]] || continue
+        [[ $(opt_get "$o") == "$want" ]] && continue
+        hyprctl keyword "$o" "$want" >/dev/null
+    done
+}
 
 # The binds worth keeping inside the lock: hardware keys, which are not a way
 # to get distracted, and the lock screen. Read from the live config rather than
@@ -191,6 +227,12 @@ rearm() {
     hyprctl --batch "keyword unbind SUPER, mouse:272 ; keyword unbind SUPER, mouse:273" >/dev/null
     hyprctl keyword general:col.active_border "$BORDER" >/dev/null
     hyprctl dispatch submap zen >/dev/null
+
+    # The reload that got us here flattened the runtime settings as well. Their
+    # live values are already gone, so the snapshot zen took on the way in is
+    # all there is to go on.
+    { read -r _; read -r _; read -r _; restore_opts; } <"$STATE" 2>/dev/null || true
+    red reapply
 }
 
 zen_on() {
@@ -225,7 +267,7 @@ zen_on() {
     setsid -f "$SELF" __watch "$addr" >/dev/null 2>&1
 
     command -v swaync-client >/dev/null && swaync-client -dn >/dev/null 2>&1
-    printf '%s\n%s\n%s\n' "$addr" "$dnd" "$title" >"$STATE"
+    { printf '%s\n%s\n%s\n' "$addr" "$dnd" "$title"; snapshot_opts; } >"$STATE"
 }
 
 zen_off() {
@@ -234,8 +276,11 @@ zen_off() {
         return 0
     fi
 
-    local addr dnd title pid
+    local addr dnd title pid snap
     { read -r addr; read -r dnd; read -r title; } <"$STATE" || true
+    # Taken live rather than from the state file, so a mode he switched during
+    # zen is the one that survives leaving it.
+    snap=$(snapshot_opts)
     rm -f "$STATE"
 
     # Checked against its cmdline first, so a recycled pid is never the one
@@ -252,6 +297,8 @@ zen_off() {
     # Re-reads the binds and the border colour from the config files, and drops
     # the submap this script built along the way.
     hyprctl reload config-only >/dev/null
+    restore_opts <<<"$snap"
+    red reapply
 
     # Only lift do-not-disturb if zen was what turned it on — dsa mode and pomo
     # use it too, and one of them may still be running.
