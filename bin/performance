@@ -36,7 +36,6 @@ bluetoothctl power on >/dev/null 2>&1 || true
 step "Hyprland: animations ON, blur ON"
 hyprctl keyword animations:enabled 1              >/dev/null 2>&1 || true
 hyprctl keyword decoration:blur:enabled 1          >/dev/null 2>&1 || true
-hyprctl keyword decoration:drop_shadow true         >/dev/null 2>&1 || true
 
 # --- 7. NMI watchdog on (normal behavior) ---
 step "NMI watchdog: ON"

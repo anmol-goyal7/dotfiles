@@ -38,7 +38,6 @@ bluetoothctl power off >/dev/null 2>&1 || true
 step "Hyprland: animations OFF, blur OFF"
 hyprctl keyword animations:enabled 0              >/dev/null 2>&1 || true
 hyprctl keyword decoration:blur:enabled 0          >/dev/null 2>&1 || true
-hyprctl keyword decoration:drop_shadow false        >/dev/null 2>&1 || true
 
 # --- 7. Disable NMI watchdog ---
 step "NMI watchdog: OFF"
