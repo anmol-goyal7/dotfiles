@@ -4,6 +4,9 @@
 
 notif="$HOME/.config/swaync/images/ja.png"
 SCRIPTSDIR="$HOME/.config/hypr/scripts"
+# `hyprctl reload` below re-reads the config files, which drops the red tint —
+# it is set at runtime and written down nowhere. Put it back afterwards.
+RED="$HOME/repos/dotfiles/bin/red"
 
 
 HYPRGAMEMODE=$(hyprctl getoption animations:enabled | awk 'NR==1{print $2}')
@@ -27,8 +30,10 @@ else
 	${SCRIPTSDIR}/WallustSwww.sh
 	sleep 0.5
   hyprctl reload
+  "$RED" reapply
 	${SCRIPTSDIR}/Refresh.sh	 
     notify-send -e -u normal -i "$notif" " Gamemode:" " disabled"
     exit
 fi
 hyprctl reload
+"$RED" reapply

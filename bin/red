@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# red — the red screen tint (Super+N, or `red` / `blue` at a prompt).
+#
+#   red            turn it on — same as the old alias, so typing it twice is
+#                  still a no-op rather than a toggle
+#   red on
+#   red off        what the `blue` alias runs
+#   red toggle     what Super+N is bound to
+#   red status     print "on" or "off"
+#   red reapply    put the tint back if a config reload dropped it
+#
+# The tint is a fragment shader — hypr/shaders/red-tint.glsl throws the green
+# and blue channels away outright — hung on `decoration:screen_shader`.
+#
+# That option can only be set at runtime and appears in no config file, so
+# every `hyprctl reload` wipes it: leaving zen mode, leaving game mode, or
+# Hyprland re-reading its own config after any edit under hypr/. Hence
+# `reapply`, which the scripts that reload call once they are done, and hence
+# the state file — after the reload the live value is already gone, so there is
+# nothing left to read the old setting off.
+
+set -u
+
+SHADER="$HOME/.config/hypr/shaders/red-tint.glsl"
+STATE="${XDG_RUNTIME_DIR:-/tmp}/red-mode.state"
+
+need_hypr() {
+    if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+        echo "red: needs a running Hyprland session" >&2
+        exit 1
+    fi
+}
+
+# The live value, which is the truth for `status` — he may have cleared the
+# shader by hand. An unset option comes back as an empty string.
+live() {
+    hyprctl getoption decoration:screen_shader -j 2>/dev/null |
+        jq -r 'if .str == "[[EMPTY]]" then "" else (.str // "") end'
+}
+
+red_on() {
+    hyprctl keyword decoration:screen_shader "$SHADER" >/dev/null
+    : >"$STATE"
+}
+
+red_off() {
+    hyprctl keyword decoration:screen_shader "" >/dev/null
+    rm -f "$STATE"
+}
+
+status() {
+    [[ $(live) == "$SHADER" ]] && echo on || echo off
+}
+
+# Only ever puts the tint back, never takes it away: if he ran `blue` the state
+# file is gone and there is nothing to restore.
+reapply() {
+    [[ -e $STATE ]] || return 0
+    [[ $(live) == "$SHADER" ]] && return 0
+    hyprctl keyword decoration:screen_shader "$SHADER" >/dev/null
+}
+
+case ${1:-on} in
+    on)      need_hypr; red_on ;;
+    off)     need_hypr; red_off ;;
+    toggle)  need_hypr; if [[ $(status) == on ]]; then red_off; else red_on; fi ;;
+    status)  need_hypr; status ;;
+    reapply) need_hypr; reapply ;;
+    *)       echo "usage: red [on|off|toggle|status|reapply]" >&2; exit 2 ;;
+esac

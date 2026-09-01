@@ -197,8 +197,9 @@ PROMPT='%F{blue}%~%f %F{cyan}❯%f '
 precmd() { print -Pn "\e]0;%~\a"; }
 
 # --- Screen Red Tint (100% red, blocks all blue/green light) ---
-alias red='hyprctl keyword decoration:screen_shader ~/.config/hypr/shaders/red-tint.glsl'
-alias blue='hyprctl keyword decoration:screen_shader ""'
+# `red` is bin/red, already on PATH — bare `red` still just turns it on. The
+# alias is only here so `blue` keeps meaning what it always did.
+alias blue='red off'
 export PATH="$HOME/.npm-global/bin:$PATH"
 
 # =============================================================================
