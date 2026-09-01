@@ -29,10 +29,12 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 - **Vim-motion window control** — `SUPER+hjkl` focus, `SUPER+SHIFT+hjkl` resize, `SUPER+CTRL+hjkl` move, `SUPER+R` enters a resize submap (border turns red until `Esc`).
 - **Keyboard mouse clicks** — `SUPER+CTRL+Space` / `SUPER+CTRL+x` left/right click via ydotool.
 - **Power modes on function keys** — `SUPER+F1..F4` switch battery-saver / balanced / performance profiles (cpupower + Intel P-State + TLP, wired through scoped sudoers rules in `etc/sudoers.d/`).
+- **Zen mode** — `SUPER+F5` toggles a lock-in mode: every bind that moves, resizes, floats or reorders a window is unbound (`SUPER`+drag included), so the window you are working in stays put. Focus, workspace switching and launchers still work, and fullscreen is left alone on purpose. Notifications go quiet except the low-battery warning, which is sent at critical urgency — swaync lets those through do-not-disturb. The border turns purple while it is on. `bin/zen` reads the bind list from `hyprctl binds -j` instead of hardcoding it, and leaves the mode with `hyprctl reload config-only`, so it can never strand you without keys.
+- **Low battery warning that goes away** — `bin/battery-low-warning --watch` runs as a systemd user service, blocking on `upower` events rather than polling. The warning is sticky by design (critical urgency, `timeout-critical: 0`), so it records its notification id and closes it over D-Bus the moment the charger goes in.
 - **OCR anywhere** — `SUPER+SHIFT+T` selects a region, runs tesseract, puts the text on the clipboard.
 - **Dropdown terminal** — `SUPER+SHIFT+Return`.
 - **Screenshots** — hyprshot region/window/output, saved to `~/Pictures/Screenshots` and copied to the clipboard.
-- **System toggles without a mouse** — Wi-Fi `SUPER+F5`, Bluetooth `SUPER+F6`, mute `SUPER+F7`, airplane mode `SUPER+F8`.
+- **System toggles without a mouse** — Wi-Fi `SUPER+F9`, Bluetooth `SUPER+F6`, mute `SUPER+F7`, airplane mode `SUPER+F8`.
 - **Notifications** — `SUPER+`` ` `` toggles the SwayNC panel, `SUPER+SHIFT+`` ` `` clears.
 - **OLED pixel-shift** — the bar's contents drift 0–3px every 10 minutes, via a flash-free waybar style reload you will not notice.
 
@@ -40,7 +42,7 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 
 ```
 .
-├── bin/            power modes, `afk` keep-awake, focus modes, waybar pixel-shift
+├── bin/            power modes, `afk` keep-awake, focus modes, battery warning, waybar pixel-shift
 ├── etc/sudoers.d/  scoped NOPASSWD rules the power scripts need
 ├── hypr/           hyprland.conf + UserConfigs/ (keybinds, env, rules, startup)
 │   ├── scripts/    helper scripts (refresh, screenshots, toggles, gamemode…)
@@ -48,6 +50,7 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 ├── kitty/          kitty.conf + themes (Tokyo Night OLED, gruvbox)
 ├── nvim/           init.lua, plugins, keymaps (lazy.nvim)
 ├── swaync/         notification center — Tokyo Night OLED
+├── systemd/user/   the low-battery warning service
 ├── waybar/         bar config + Tokyo Night OLED style
 ├── zsh/            zshrc — vim mode, fzf, zoxide, plugins
 ├── tmux/ yazi/ qutebrowser/ zathura/
