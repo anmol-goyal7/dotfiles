@@ -8,6 +8,7 @@
 #   red toggle     what Super+N is bound to
 #   red status     print "on" or "off"
 #   red reapply    put the tint back if a config reload dropped it
+#   red watch      the listener that calls reapply after every reload
 #
 # The tint is a fragment shader — hypr/shaders/red-tint.glsl throws the green
 # and blue channels away outright — hung on `decoration:screen_shader`.
@@ -18,11 +19,18 @@
 # `reapply`, which the scripts that reload call once they are done, and hence
 # the state file — after the reload the live value is already gone, so there is
 # nothing left to read the old setting off.
+#
+# Those two callers were never enough. `misc:disable_autoreload` is off, so
+# Hyprland re-reads the config on its own every time hyprland.lua or a module
+# under lua/ is saved, and nothing was there to put the tint back: it just
+# vanished mid-edit while the state file still said "on". `red watch` is the
+# listener that covers every reload, whoever caused it.
 
 set -u
 
 SHADER="$HOME/.config/hypr/shaders/red-tint.glsl"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/red-mode.state"
+WATCHPID="${XDG_RUNTIME_DIR:-/tmp}/red-watch.pid"
 SELF=$(readlink -f "$0")
 # By path, not by name: a Hyprland bind does not run under his shell's PATH.
 HLSET="${SELF%/*}/hlset"
@@ -63,11 +71,75 @@ reapply() {
     "$HLSET" decoration:screen_shader "$SHADER" >/dev/null
 }
 
+# Runs for the life of the session, started from hypr/lua/startup.lua. zen and
+# GameMode.sh still call reapply themselves; that is harmless, reapply is a
+# no-op when the tint is already up.
+watch() {
+    # One listener per session. A stale pidfile from a previous Hyprland does
+    # not count, so it is checked against its cmdline rather than its existence
+    # alone -- after the exec below that cmdline still carries this script's
+    # path, as python3's argument.
+    if [[ -r $WATCHPID ]]; then
+        read -r pid <"$WATCHPID"
+        if [[ -n ${pid:-} ]] && grep -qa "$SELF" "/proc/$pid/cmdline" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # A fresh session starts untinted, whatever the last one was doing. The
+    # state file lives in $XDG_RUNTIME_DIR, which belongs to the tty login and
+    # outlives the compositor, so without this a `red` from before a restart
+    # would sit there and reappear at the next reapply -- the screen going red
+    # on its own, hours later, for no reason he asked for. Cleared here rather
+    # than in the case below so that re-running `red watch` cannot wipe the
+    # state out from under a listener that is already up.
+    rm -f "$STATE"
+    echo $$ >"$WATCHPID"
+
+    exec python3 - "$SELF" <<'PY'
+import os, socket, subprocess, sys, time
+
+red  = sys.argv[1]
+path = os.path.join(os.environ["XDG_RUNTIME_DIR"], "hypr",
+                    os.environ["HYPRLAND_INSTANCE_SIGNATURE"], ".socket2.sock")
+
+# Started from exec-once, so the event socket is normally already there -- but
+# never fail silently at login, because a listener that never came up looks
+# exactly like the bug it exists to fix.
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+for _ in range(10):
+    try:
+        sock.connect(path)
+        break
+    except OSError:
+        time.sleep(0.5)
+else:
+    sys.exit("red: could not reach the Hyprland event socket")
+
+buf = b""
+while True:
+    data = sock.recv(4096)
+    if not data:
+        break            # the compositor went away; so does this
+    buf += data
+    while b"\n" in buf:
+        raw, buf = buf.split(b"\n", 1)
+        event, _, _arg = raw.decode("utf-8", "replace").partition(">>")
+        # The reload lands asynchronously: setting the option too early only
+        # gets it overwritten by the reload that is still coming in.
+        if event == "configreloaded":
+            time.sleep(0.3)
+            subprocess.run([red, "reapply"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+PY
+}
+
 case ${1:-on} in
     on)      need_hypr; red_on ;;
     off)     need_hypr; red_off ;;
     toggle)  need_hypr; if [[ $(status) == on ]]; then red_off; else red_on; fi ;;
     status)  need_hypr; status ;;
     reapply) need_hypr; reapply ;;
-    *)       echo "usage: red [on|off|toggle|status|reapply]" >&2; exit 2 ;;
+    watch)   need_hypr; watch ;;
+    *)       echo "usage: red [on|off|toggle|status|reapply|watch]" >&2; exit 2 ;;
 esac

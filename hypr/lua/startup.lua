@@ -37,4 +37,11 @@ hl.on("hyprland.start", function()
 
     -- Idle handling: dim, lock, dpms, suspend.
     hl.exec_cmd("hypridle")
+
+    -- Red tint (Super+N). The shader hangs on decoration:screen_shader, which
+    -- exists only at runtime, so every config reload drops it -- including the
+    -- automatic one Hyprland does whenever a file here is saved. This listens
+    -- for configreloaded and puts it back. Also clears last session's state,
+    -- so a fresh session always comes up untinted.
+    hl.exec_cmd(apps.dotbin .. "/red watch")
 end)
