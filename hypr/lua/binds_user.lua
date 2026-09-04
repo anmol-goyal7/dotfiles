@@ -3,6 +3,7 @@
 local util = require("lua.util")
 local apps = require("lua.apps")
 local bind, exec, mod = util.bind, util.exec, util.mod
+local resize_by = util.resize_by
 
 local S    = apps.scripts
 local BIN  = apps.dotbin
@@ -31,13 +32,10 @@ local VIM_RESIZE = {
     k = { x = 0, y = -50 }, j = { x = 0, y = 50 },
 }
 
--- The SHIFT bind takes the key uppercased: with Shift held the keysym that
--- reaches Hyprland is "H", not "h", and a bind registered lowercase never
--- matches. SUPER and CTRL leave the keysym alone, so those stay as-is.
 for key, dir in pairs(VIM) do
-    bind(mod .. " + " .. key,                    hl.dsp.focus({ direction = dir }),       { desc = "focus " .. dir })
-    bind(mod .. " + SHIFT + " .. key:upper(),    hl.dsp.window.resize(VIM_RESIZE[key]),   { repeating = true, desc = "resize window " .. dir })
-    bind(mod .. " + CTRL + " .. key,             hl.dsp.window.move({ direction = dir }), { desc = "move window " .. dir })
+    bind(mod .. " + " .. key,           hl.dsp.focus({ direction = dir }),          { desc = "focus " .. dir })
+    bind(mod .. " + SHIFT + " .. key,   resize_by(VIM_RESIZE[key]),                 { repeating = true, desc = "resize window " .. dir })
+    bind(mod .. " + CTRL + " .. key,    hl.dsp.window.move({ direction = dir }),    { desc = "move window " .. dir })
 end
 
 -- ---------------------------------------------------------------------------

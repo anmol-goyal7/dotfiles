@@ -90,6 +90,14 @@ function M.submap(name, fn)
     end)
 end
 
+---Resize the active window by a pixel delta.
+---hl.dsp.window.resize reads x/y as an ABSOLUTE size unless `relative` is set,
+---so a delta like { x = -50 } comes back as "Invalid size". The .conf
+---resizeactive was always a delta, so every caller here wants relative.
+function M.resize_by(delta)
+    return hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true })
+end
+
 ---Convenience: a bind that runs a shell command.
 function M.exec(keys, cmd, opts)
     return M.bind(keys, hl.dsp.exec_cmd(cmd), opts)

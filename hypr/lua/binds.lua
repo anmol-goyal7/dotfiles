@@ -7,6 +7,7 @@
 local util = require("lua.util")
 local apps = require("lua.apps")
 local bind, exec, mod = util.bind, util.exec, util.mod
+local resize_by = util.resize_by
 
 local S = apps.scripts
 
@@ -59,7 +60,7 @@ local RESIZE = {
 }
 
 for key, dir in pairs(ARROWS) do
-    bind(mod .. " + SHIFT + " .. key, hl.dsp.window.resize(RESIZE[key]), { repeating = true, desc = "resize window " .. key })
+    bind(mod .. " + SHIFT + " .. key, resize_by(RESIZE[key]), { repeating = true, desc = "resize window " .. key })
     bind(mod .. " + CTRL + " .. key,  hl.dsp.window.move({ direction = dir }), { desc = "move window " .. key })
     bind(mod .. " + ALT + " .. key,   hl.dsp.window.swap({ direction = dir }), { desc = "swap window " .. key })
     bind(mod .. " + " .. key,         hl.dsp.focus({ direction = dir }),       { desc = "focus " .. key })

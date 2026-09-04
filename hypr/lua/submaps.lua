@@ -30,7 +30,7 @@ util.submap("resize", function()
     local STEP = { l = { x = 10, y = 0 }, h = { x = -10, y = 0 },
                    k = { x = 0, y = -10 }, j = { x = 0, y = 10 } }
     for key, delta in pairs(STEP) do
-        bind(key, hl.dsp.window.resize(delta), { repeating = true, desc = "resize" })
+        bind(key, util.resize_by(delta), { repeating = true, desc = "resize" })
     end
     bind("escape", function()
         set_border(NORMAL_BORDER)
