@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# =============================================================================
+# screen-wake — get the panel back when the idle ladder leaves it dark
+# =============================================================================
+# Run it when the laptop comes back from idle or suspend to a black screen that
+# will not light up:
+#
+#     Ctrl+Alt+F2  ->  log in  ->  screen-wake  ->  Ctrl+Alt+F1
+#
+# It is also hypridle's after_sleep_cmd, and what bin/lock calls when hyprlock
+# dies mid-lock. Three separate things can leave the screen black and this
+# undoes all three:
+#
+#   1. DPMS is still off. Turning it back on needs bin/dpms: on 0.56 the Lua
+#      dispatcher IGNORES its argument and toggles, so dpms("on") turns a lit
+#      screen OFF. bin/dpms reads the real state and only toggles when it has
+#      to. (The pre-0.56 `hyprctl dispatch dpms on` string form is dead too.)
+#   2. The backlight is still dimmed. hypridle's dim step saves the pre-dim
+#      level with `brightnessctl -s`, into a plain number under
+#      $XDG_RUNTIME_DIR. If that save ever gets clobbered by a second dim,
+#      `-r` restores the dim value and the panel stays dark forever, so a
+#      restore that lands below FLOOR_PCT is treated as a failed restore.
+#   3. hyprlock died while holding the ext-session-lock. Hyprland then keeps
+#      the session locked and paints black, and swallows every key -- that is
+#      the state you cannot type your way out of. misc:allow_session_lock_restore
+#      (set in hypr/lua/settings.lua) lets a fresh hyprlock re-attach to it.
+#
+# Safe to run any time: it never locks a session that is not already locked.
+# =============================================================================
+
+set -u
+
+# Sibling scripts (dpms, screen-wake) resolve from this directory even when
+# we are run from a TTY or by hypridle with a trimmed PATH.
+PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd):$PATH"
+
+FLOOR_PCT=30          # a restore below this is treated as "restore failed"
+
+say() { echo "screen-wake: $*"; }
+
+# ---- find the session, in case we were started from a TTY -------------------
+
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    his=$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)
+    [[ -n $his ]] || { say "no Hyprland instance found"; exit 1; }
+    export HYPRLAND_INSTANCE_SIGNATURE="$his"
+fi
+
+if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
+    wl=$(ls "$XDG_RUNTIME_DIR"/wayland-[0-9]* 2>/dev/null | head -1)
+    [[ -n $wl ]] && export WAYLAND_DISPLAY="${wl##*/}"
+fi
+
+# ---- 1. DPMS ----------------------------------------------------------------
+
+dpms_on() {
+    dpms on || { say "could not turn DPMS on"; return 1; }
+}
+
+# ---- 2. backlight -----------------------------------------------------------
+
+pct() { # current backlight as a whole percent
+    local cur max
+    cur=$(brightnessctl -m 2>/dev/null | cut -d, -f3)
+    max=$(brightnessctl -m 2>/dev/null | cut -d, -f5)
+    [[ -n ${cur:-} && ${max:-0} -gt 0 ]] || { echo 100; return; }
+    echo $(( cur * 100 / max ))
+}
+
+undim() {
+    command -v brightnessctl >/dev/null || return 0
+    brightnessctl -r >/dev/null 2>&1
+    if (( $(pct) < FLOOR_PCT )); then
+        say "saved brightness was dark too, forcing ${FLOOR_PCT}%"
+        brightnessctl set "${FLOOR_PCT}%" >/dev/null 2>&1
+    fi
+}
+
+# ---- 3. orphaned session lock -----------------------------------------------
+
+locked_session() { # echo the graphical session id if it is locked
+    local s
+    while read -r s _; do
+        [[ -n $s ]] || continue
+        [[ $(loginctl show-session "$s" -p Type --value 2>/dev/null) == wayland ]] || continue
+        [[ $(loginctl show-session "$s" -p LockedHint --value 2>/dev/null) == yes ]] || continue
+        echo "$s"; return 0
+    done < <(loginctl list-sessions --no-legend 2>/dev/null)
+    return 1
+}
+
+relock_if_orphaned() {
+    pidof hyprlock >/dev/null && return 0
+    locked_session >/dev/null || return 0
+    say "session is locked with no hyprlock — re-attaching a lock surface"
+    hyprlock --immediate-render --no-fade-in >/dev/null 2>&1 &
+}
+
+# ---- go ---------------------------------------------------------------------
+# --no-relock: light the panel back up but leave the lock surface alone. bin/lock
+# passes it, because bin/lock IS the thing respawning hyprlock -- letting both
+# do it would race two lock clients onto one session.
+
+dpms_on
+undim
+[[ ${1:-} == --no-relock ]] || relock_if_orphaned

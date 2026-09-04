@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# =============================================================================
+# lock — hypridle's lock_cmd: hyprlock, supervised
+# =============================================================================
+# Starting hyprlock is the single most dangerous step in the idle ladder. It
+# takes Hyprland's ext-session-lock, and the protocol says a compositor whose
+# lock client dies MUST keep the screen blanked and keep swallowing input --
+# that is the black screen you can only get out of with the power button.
+#
+# So: never let a dead hyprlock be the last word. If it exits without having
+# unlocked, light the panel back up and re-attach a fresh lock surface
+# (misc:allow_session_lock_restore in hypr/lua/settings.lua allows this).
+# After three failures, stop trying and leave the screen ON and unlocked --
+# an unlocked laptop is recoverable, a bricked one is not.
+#
+# --grace 2: a stray keypress right after the lock lands won't force a
+# password. hyprlock 0.9.6 moved `grace` from the config file to this flag.
+# --immediate-render: draw the background without waiting on resources, so the
+# lock surface commits a frame even if the output is in a bad way.
+# =============================================================================
+
+set -u
+
+# Sibling scripts (dpms, screen-wake) resolve from this directory even when
+# we are run from a TTY or by hypridle with a trimmed PATH.
+PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd):$PATH"
+
+# Already locked by a live hyprlock? Nothing to do.
+pidof hyprlock >/dev/null && exit 0
+
+for try in 1 2 3; do
+    hyprlock --immediate-render --no-fade-in --grace 2 && exit 0
+    echo "lock: hyprlock exited $? without unlocking (attempt $try)" >&2
+    screen-wake --no-relock
+done
+
+echo "lock: hyprlock failed three times, giving up rather than leaving a dead lock" >&2
+screen-wake --no-relock
+loginctl unlock-session 2>/dev/null
+exit 1

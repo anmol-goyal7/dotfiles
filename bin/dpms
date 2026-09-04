@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dpms — set the panel's DPMS state ABSOLUTELY.  Usage: dpms on|off|status
+# =============================================================================
+# THIS IS THE SCRIPT THAT FIXES THE BLACK SCREEN.
+#
+# On Hyprland 0.56.2 the Lua bridge's dpms dispatcher IGNORES its argument and
+# always TOGGLES. Verified:
+#
+#     $ hyprctl dispatch 'hl.dsp.dpms("on")'   # screen was ON
+#     ok
+#     $ hyprctl monitors | grep dpms
+#         dpmsStatus: 0                        # ...it turned the screen OFF
+#
+# Same for dpms("off"), dpms(false), and dpms("on", "eDP-1"). Only the toggle
+# actually happens. (The pre-0.56 string form, `hyprctl dispatch dpms on`, is
+# dead too -- it fails with a Lua parse error. See [[hypr-lua-config]].)
+#
+# That is what was killing the laptop on idle. hypridle blanked the screen at
+# 5 min with dpms("off") -- a toggle, so correct by luck. Then on resume BOTH
+# the listener's on-resume AND after_sleep_cmd fired dpms("on"), two toggles:
+# on, then straight back off. The panel went dark, hyprlock was already
+# holding the session lock so no keybind could reach the compositor, and the
+# only way out was the power button.
+#
+# So: read the real state first, and toggle only when it actually differs.
+# Verify afterwards, because the dispatch is applied asynchronously -- reading
+# the state immediately after gives you the value from before the commit.
+# =============================================================================
+
+set -u
+
+want=${1:-status}
+
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    his=$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)
+    [[ -n $his ]] || { echo "dpms: no Hyprland instance found" >&2; exit 1; }
+    export HYPRLAND_INSTANCE_SIGNATURE="$his"
+fi
+
+# "true" (on) / "false" (off), read off the first monitor. One internal panel
+# here, and `hl.dsp.dpms` has no working per-monitor selector anyway.
+state() {
+    hyprctl monitors -j 2>/dev/null | grep -m1 -o '"dpmsStatus": [a-z]*' | awk '{print $2}'
+}
+
+case $want in
+    status) s=$(state); [[ $s == true ]] && echo on || echo off; exit 0 ;;
+    on)  target=true  ;;
+    off) target=false ;;
+    *)   echo "usage: dpms on|off|status" >&2; exit 2 ;;
+esac
+
+# Turning the panel ON is the safety-critical direction -- a screen stuck off is
+# the whole bug -- so retry hard and fail loudly. Turning it OFF is best-effort:
+# anything genuinely using the machine (a client rendering, the cursor moving,
+# misc:mouse_move_enables_dpms) legitimately lights it straight back up, and a
+# lit panel is never the dangerous outcome. Don't fight that, and don't flicker.
+attempts=5
+[[ $want == off ]] && attempts=2
+
+for (( try = 0; try < attempts; try++ )); do
+    now=$(state)
+    [[ -z $now ]] && { echo "dpms: cannot read monitor state" >&2; exit 1; }
+    [[ $now == "$target" ]] && exit 0
+    hyprctl dispatch 'hl.dsp.dpms("toggle")' >/dev/null 2>&1
+    sleep 0.6          # the commit is async; reading sooner reads the old value
+done
+
+[[ $(state) == "$target" ]] && exit 0
+[[ $want == off ]] && exit 0        # something is using the machine; fine
+echo "dpms: failed to turn the panel on" >&2
+exit 1
