@@ -11,8 +11,9 @@ source "$tmp_config_file"
 # ##################################### #
 
 # variables
-configs="$HOME/.config/hypr/configs"
 UserConfigs="$HOME/.config/hypr/UserConfigs"
+# The config is Lua now; the .conf tree it replaced is in hypr/legacy-conf/.
+luaConfigs="$HOME/.config/hypr/lua"
 rofi_theme="$HOME/.config/rofi/config-edit.rasi"
 msg=' ⁉️ Choose what to do ⁉️'
 iDIR="$HOME/.config/swaync/images"
@@ -54,15 +55,15 @@ main() {
     # Map choices to corresponding files
     case "$choice" in
     	"view/edit User Defaults") file="$UserConfigs/01-UserDefaults.conf" ;;
-        "view/edit ENV variables") file="$UserConfigs/ENVariables.conf" ;;
-        "view/edit Window Rules") file="$UserConfigs/WindowRules.conf" ;;
-        "view/edit User Keybinds") file="$UserConfigs/UserKeybinds.conf" ;;
-        "view/edit User Settings") file="$UserConfigs/UserSettings.conf" ;;
-        "view/edit Startup Apps") file="$UserConfigs/Startup_Apps.conf" ;;
-        "view/edit Decorations") file="$UserConfigs/UserDecorations.conf" ;;
-        "view/edit Animations") file="$UserConfigs/UserAnimations.conf" ;;
-        "view/edit Laptop Keybinds") file="$UserConfigs/Laptops.conf" ;;
-        "view/edit Default Keybinds") file="$configs/Keybinds.conf" ;;
+        "view/edit ENV variables") file="$luaConfigs/env.lua" ;;
+        "view/edit Window Rules") file="$luaConfigs/rules.lua" ;;
+        "view/edit User Keybinds") file="$luaConfigs/binds_user.lua" ;;
+        "view/edit User Settings") file="$luaConfigs/settings.lua" ;;
+        "view/edit Startup Apps") file="$luaConfigs/startup.lua" ;;
+        "view/edit Decorations") file="$luaConfigs/look.lua" ;;
+        "view/edit Animations") file="$luaConfigs/look.lua" ;;
+        "view/edit Laptop Keybinds") file="$luaConfigs/binds_laptop.lua" ;;
+        "view/edit Default Keybinds") file="$luaConfigs/binds.lua" ;;
         "Choose Kitty Terminal Theme") $scriptsDir/Kitty_themes.sh ;;
         "Configure Monitors (nwg-displays)") 
             if ! command -v nwg-displays &>/dev/null; then

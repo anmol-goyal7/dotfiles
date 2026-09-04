@@ -21,7 +21,8 @@
 # This is for changing kb_layouts. Set kb_layouts in 
 
 MAP_FILE="$HOME/.cache/kb_layout_per_window"
-CFG_FILE="$HOME/.config/hypr/UserConfigs/UserSettings.conf"
+# kb_layout comes from the compositor now; UserSettings.conf is gone with the
+# move to the Lua config.
 ICON="$HOME/.config/swaync/images/ja.png"
 SCRIPT_NAME="$(basename "$0")"
 
@@ -29,11 +30,11 @@ SCRIPT_NAME="$(basename "$0")"
 touch "$MAP_FILE"
 
 # Read layouts from config
-if ! grep -q 'kb_layout' "$CFG_FILE"; then
-  echo "Error: cannot find kb_layout in $CFG_FILE" >&2
+if ! hyprctl getoption input:kb_layout >/dev/null 2>&1; then
+  echo "Error: cannot read input:kb_layout from Hyprland" >&2
   exit 1
 fi
-kb_layouts=($(grep 'kb_layout' "$CFG_FILE" | cut -d '=' -f2 | tr -d '[:space:]' | tr ',' ' '))
+kb_layouts=($(hyprctl getoption input:kb_layout -j | jq -r '.str // "us"' | tr -d '[:space:]' | tr ',' ' '))
 count=${#kb_layouts[@]}
 
 # Get current active window ID

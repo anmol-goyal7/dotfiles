@@ -14,32 +14,38 @@
 #
 #   1. A `zen` submap. Entering a submap makes every global bind inactive at
 #      once — launchers, workspace switching, movement, the lot — instead of
-#      unbinding them one at a time. Only what this script re-declares inside
-#      the submap still works: Super+F5 to leave, the XF86 hardware keys
-#      (volume, brightness, media, mic) and the lock-screen bind. Leaving is
-#      `submap reset` + `hyprctl reload config-only`, which re-reads every bind
-#      from the config files, so a botched submap cannot strand you. Hyprland
-#      re-reads its config whenever a config file changes, which would empty
-#      the submap and leave no way out at all, so the watcher rebuilds it on
-#      every `configreloaded`.
+#      unbinding them one at a time. Only what the submap declares still works:
+#      Super+F5 to leave, the hardware keys (volume, brightness, media, mic)
+#      and the lock-screen bind.
+#
+#      The submap itself is declared in the config, in hypr/lua/submaps.lua,
+#      not built here. That is what makes it survive a reload: Hyprland
+#      re-reads the config whenever a file under hypr/ changes, and under the
+#      old .conf setup the submap was assembled at runtime with `hyprctl
+#      keyword`, so a reload emptied it — the compositor stayed *in* the zen
+#      submap with nothing bound in it, not even the way out. Now a reload
+#      rebuilds it from the config. What a reload does still drop is the
+#      runtime half — border colour, the mouse-drag unbinds, the browser keys —
+#      and ZEN_ARM puts those back; the watcher calls it on configreloaded.
 #
 #   2. A focus watcher on Hyprland's event socket. Keybinds are only half the
 #      problem — a click on another window, or an app popping one open, would
 #      still move you. The watcher snaps focus straight back to the locked
 #      window, which also drags you back from another workspace, since
-#      `focuswindow` follows the window. It stands down on its own if the
-#      locked window is closed, so quitting the app cannot leave you trapped.
+#      focusing follows the window. It stands down on its own if the locked
+#      window is closed, so quitting the app cannot leave you trapped.
 #
 # Keys the compositor cannot see the meaning of get swallowed by binding them
 # to a no-op inside the submap. Ctrl+Shift+T/N (new tab, new window in both a
 # browser and kitty) and Alt+Tab go always; the plain Ctrl+T/N/L/Tab/1-9 group
 # only when the locked window is a browser, because in a terminal those are
 # work keys — Ctrl+L clears the screen, Ctrl+N completes in nvim, Ctrl+T is
-# fzf.
+# fzf. See ZEN_SWALLOW / ZEN_SWALLOW_BROWSER in hypr/lua/submaps.lua.
 #
-# That reload is also why leaving zen used to take the red tint and the current
-# power mode down with it: it re-reads the config files, and both of those live
-# only at runtime. Zen snapshots them on the way out and puts them back.
+# Leaving is `submap reset` + `hyprctl reload config-only`. That reload is also
+# why leaving zen used to take the red tint and the current power mode down
+# with it: it re-reads the config, and both of those live only at runtime. Zen
+# snapshots them on the way out and puts them back.
 #
 # Notifications go quiet through swaync do-not-disturb. Critical ones still
 # come through (swaync 0.12.6), which is how the low battery warning stays
@@ -49,13 +55,15 @@ set -u
 
 STATE="${XDG_RUNTIME_DIR:-/tmp}/zen-mode.state"
 WATCHPID="${XDG_RUNTIME_DIR:-/tmp}/zen-watch.pid"
-BORDER='rgba(bb9af7ff)'
 SELF=$(readlink -f "$0")
 BROWSERS='brave|chrome|chromium|firefox|vivaldi|opera|edge|qutebrowser'
 # Options the power-mode scripts set at runtime and no config file mentions.
-# `hyprctl reload` re-reads those files, so leaving zen used to hand blur and
-# animations back to the config and quietly undo saver or game mode.
+# `hyprctl reload` re-reads the config, so leaving zen used to hand blur and
+# animations back to it and quietly undo saver or game mode.
 PRESERVE=(animations:enabled decoration:blur:enabled)
+
+# By path, not by name: a Hyprland bind does not run under his shell's PATH.
+HLSET="${SELF%/*}/hlset"
 
 need_hypr() {
     if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
@@ -68,7 +76,6 @@ note() { command -v notify-send >/dev/null && notify-send -a zen "$@" >/dev/null
 
 # The red tint is lost to a reload the same way, but bin/red owns that one, so
 # ask it to put itself back rather than snapshotting the shader here too.
-# By path, not by name: a Hyprland bind does not run under his shell's PATH.
 red() { "${SELF%/*}/red" "$1" >/dev/null 2>&1 || true; }
 
 opt_get() {
@@ -90,63 +97,17 @@ restore_opts() {
     while IFS=$'\t' read -r o want; do
         [[ -n $o && -n $want ]] || continue
         [[ $(opt_get "$o") == "$want" ]] && continue
-        hyprctl keyword "$o" "$want" >/dev/null
+        "$HLSET" "$o" "$want" >/dev/null
     done
 }
 
-# The binds worth keeping inside the lock: hardware keys, which are not a way
-# to get distracted, and the lock screen. Read from the live config rather than
-# retyped here, so they stay correct if he re-binds them.
-carry_binds() {
-    hyprctl binds -j | jq -r '
-      def modstr($m): [
-        {b:1,n:"SHIFT"},{b:2,n:"CAPS"},{b:4,n:"CTRL"},{b:8,n:"ALT"},
-        {b:16,n:"MOD2"},{b:32,n:"MOD3"},{b:64,n:"SUPER"},{b:128,n:"MOD5"}
-      ] | map(select((($m / .b) | floor) % 2 == 1) | .n) | join(" ");
-
-      .[] | select(.submap == "")
-      | select((.key | test("^xf86"; "i")) or (.arg | test("LockScreen|hyprlock")))
-      | ((if .locked then "l" else "" end) + (if .release then "r" else "" end)
-        + (if .repeat then "e" else "" end) + (if .mouse then "m" else "" end)
-        + (if .non_consuming then "n" else "" end))                as $flags
-      | (if .keycode != 0 then "code:\(.keycode)" else .key end)    as $key
-      | [ "bind\($flags)",
-          "\(modstr(.modmask)), \($key), \(.dispatcher)"
-            + (if .arg == "" then "" else ", \(.arg)" end)
-        ] | @tsv'
-}
-
-build_submap() {
-    local class=$1 kw value key
-
-    hyprctl keyword submap zen >/dev/null
-
-    # The way out. Nothing else may launch, focus or move anything.
-    hyprctl keyword bind "SUPER, F5, exec, $SELF" >/dev/null
-    # Keyword and value must go as two arguments. Folded into one, the "=" is
-    # read as the first modifier and the bind is dropped — silently, when the
-    # mod list is non-empty enough to hide it.
-    while IFS=$'\t' read -r kw value; do
-        [[ -n $kw ]] && hyprctl keyword "$kw" "$value" >/dev/null
-    done < <(carry_binds)
-
-    # Swallowed keys. `submap, zen` re-enters the submap already active, so it
-    # consumes the key and does nothing — no process spawned per keypress.
-    for key in "CTRL SHIFT, T" "CTRL SHIFT, N" "ALT, Tab"; do
-        hyprctl keyword bind "$key, submap, zen" >/dev/null
-    done
-
-    if [[ $class =~ ^($BROWSERS) ]]; then
-        for key in "CTRL, T" "CTRL, N" "CTRL, L" "CTRL, Tab" "CTRL SHIFT, Tab" \
-            "CTRL, prior" "CTRL, next" \
-            "CTRL, code:10" "CTRL, code:11" "CTRL, code:12" "CTRL, code:13" \
-            "CTRL, code:14" "CTRL, code:15" "CTRL, code:16" "CTRL, code:17" \
-            "CTRL, code:18"; do
-            hyprctl keyword bind "$key, submap, zen" >/dev/null
-        done
-    fi
-
-    hyprctl keyword submap reset >/dev/null
+# The runtime half of the lock: purple border, no mouse dragging, and for a
+# browser the extra swallowed keys. Declared in hypr/lua/submaps.lua and called
+# here so the bind list stays in the config where the rest of them are.
+arm() {
+    local class=$1 browser=false
+    [[ $class =~ ^($BROWSERS) ]] && browser=true
+    hyprctl eval "ZEN_ARM($browser)" >/dev/null
 }
 
 # Snaps focus back to the locked window. Runs detached; `zen off` kills it.
@@ -162,6 +123,10 @@ path = os.path.join(os.environ["XDG_RUNTIME_DIR"], "hypr",
                     os.environ["HYPRLAND_INSTANCE_SIGNATURE"], ".socket2.sock")
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 sock.connect(path)
+
+# Under the Lua config `hyprctl dispatch` takes a Lua expression, not the old
+# "<dispatcher> <args>" pair.
+refocus = ["hyprctl", "dispatch", 'hl.dsp.focus({window="address:%s"})' % locked]
 
 recent, buf = [], b""
 while True:
@@ -183,7 +148,8 @@ while True:
             subprocess.Popen([zen, "off"], start_new_session=True)
             sys.exit(0)
 
-        # A reload wiped the submap out from under us; put it back.
+        # A reload put the config's binds back and dropped zen's runtime half;
+        # re-arm it.
         if event == "configreloaded":
             time.sleep(0.3)
             subprocess.run([zen, "__rearm", locked],
@@ -200,37 +166,27 @@ while True:
                 time.sleep(0.5)
                 recent.clear()
             recent.append(now)
-            subprocess.run(["hyprctl", "dispatch", "focuswindow",
-                            "address:" + locked],
+            subprocess.run(refocus,
                            stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL)
 PY
 }
 
-# Hyprland re-reads its config whenever a config file changes, which throws
-# away a submap built at runtime. Left alone that is a lockout: the compositor
-# would still be *in* the zen submap, but with nothing bound in it — not even
-# the way out. The watcher calls this back on every `configreloaded`.
+# A reload rebuilds the submap from the config but throws away everything zen
+# set at runtime. The watcher calls this back on every `configreloaded`.
 rearm() {
-    local addr=$1 class n
+    local addr=$1 class
 
     # zen is being torn down (`zen off` removes the state before it reloads);
-    # rebuilding here would fight the release.
+    # re-arming here would fight the release.
     [[ -r $STATE ]] || return 0
 
-    n=$(hyprctl binds -j | jq '[.[] | select(.submap == "zen")] | length')
-    if ((n == 0)); then
-        class=$(hyprctl clients -j | jq -r --arg a "$addr" \
-            'first(.[] | select(.address == $a) | .class) // ""')
-        build_submap "$class"
-    fi
-    hyprctl --batch "keyword unbind SUPER, mouse:272 ; keyword unbind SUPER, mouse:273" >/dev/null
-    hyprctl keyword general:col.active_border "$BORDER" >/dev/null
-    hyprctl dispatch submap zen >/dev/null
+    class=$(hyprctl clients -j | jq -r --arg a "$addr" \
+        'first(.[] | select(.address == $a) | .class) // ""')
+    arm "$class"
 
-    # The reload that got us here flattened the runtime settings as well. Their
-    # live values are already gone, so the snapshot zen took on the way in is
-    # all there is to go on.
+    # The reload flattened the runtime settings as well. Their live values are
+    # already gone, so the snapshot zen took on the way in is all there is.
     { read -r _; read -r _; read -r _; restore_opts; } <"$STATE" 2>/dev/null || true
     red reapply
 }
@@ -241,7 +197,7 @@ zen_on() {
         return 0
     fi
 
-    local win addr title class dnd pid
+    local win addr title class dnd
     win=$(hyprctl activewindow -j)
     addr=$(jq -r '.address // ""' <<<"$win")
     title=$(jq -r '.title // ""' <<<"$win")
@@ -256,12 +212,7 @@ zen_on() {
     dnd=$(swaync-client -D 2>/dev/null || echo false)
     note "zen on" "locked to $title"
 
-    build_submap "$class"
-    # Belt and braces: the submap already makes these inactive, but the mouse
-    # drag binds are the one path that needs no keyboard at all.
-    hyprctl --batch "keyword unbind SUPER, mouse:272 ; keyword unbind SUPER, mouse:273" >/dev/null
-    hyprctl keyword general:col.active_border "$BORDER" >/dev/null
-    hyprctl dispatch submap zen >/dev/null
+    arm "$class"
 
     rm -f "$WATCHPID"
     setsid -f "$SELF" __watch "$addr" >/dev/null 2>&1
@@ -293,9 +244,9 @@ zen_off() {
         rm -f "$WATCHPID"
     fi
 
-    hyprctl dispatch submap reset >/dev/null
-    # Re-reads the binds and the border colour from the config files, and drops
-    # the submap this script built along the way.
+    hyprctl dispatch 'hl.dsp.submap("reset")' >/dev/null
+    # Re-reads the binds and the border colour from the config, and drops the
+    # browser swallows and the mouse unbinds along the way.
     hyprctl reload config-only >/dev/null
     restore_opts <<<"$snap"
     red reapply

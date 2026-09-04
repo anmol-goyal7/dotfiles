@@ -1,6 +1,11 @@
 #!/bin/bash
 # /* ---- 💫 https://github.com/JaKooLit 💫 ---- */  ##
 # searchable enabled keybinds using rofi
+#
+# This used to cat the .conf files and grep for ^bind. Those are gone with the
+# move to the Lua config, so it reads the live bind registry that
+# hypr/lua/util.lua keeps inside the compositor -- same source as bin/keys
+# (Super+/), which is the interactive version of this.
 
 # kill yad to not interfere with this binds
 pkill yad || true
@@ -10,30 +15,21 @@ if pidof rofi > /dev/null; then
   pkill rofi
 fi
 
-# define the config files
-keybinds_conf="$HOME/.config/hypr/configs/Keybinds.conf"
-user_keybinds_conf="$HOME/.config/hypr/UserConfigs/UserKeybinds.conf"
-laptop_conf="$HOME/.config/hypr/UserConfigs/Laptops.conf"
 rofi_theme="$HOME/.config/rofi/config-keybinds.rasi"
 msg='☣️ NOTE ☣️: Clicking with Mouse or Pressing ENTER will have NO function'
 
-# combine the contents of the keybinds files and filter for keybinds
-keybinds=$(cat "$keybinds_conf" "$user_keybinds_conf" | grep -E '^bind')
-
-# check if laptop.conf exists and add its keybinds if present
-if [[ -f "$laptop_conf" ]]; then
-    laptop_binds=$(grep -E '^bind' "$laptop_conf")
-    keybinds+=$'\n'"$laptop_binds"
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    echo "KeyBinds.sh: needs a running Hyprland session" >&2
+    exit 1
 fi
 
-# check for any keybinds to display
+# index \t combo \t description \t runnable -> "combo    description"
+keybinds=$(hyprctl repl 'return KEYS_LIST()' 2>/dev/null |
+    awk -F'\t' 'NF >= 3 { printf "%-28s %s\n", $2, $3 }')
+
 if [[ -z "$keybinds" ]]; then
     echo "no keybinds found."
     exit 1
 fi
 
-# replace $mainmod with super in the displayed keybinds for rofi
-display_keybinds=$(echo "$keybinds" | sed 's/\$mainMod/SUPER/g')
-
-# use rofi to display the keybinds with the modified content
-echo "$display_keybinds" | rofi -dmenu -i -config "$rofi_theme" -mesg "$msg"
+echo "$keybinds" | rofi -dmenu -i -config "$rofi_theme" -mesg "$msg"

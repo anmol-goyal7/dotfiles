@@ -11,7 +11,7 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 
 | Piece | Tool | Config |
 | :--- | :--- | :--- |
-| Compositor | [Hyprland](https://hyprland.org) | `hypr/` |
+| Compositor | [Hyprland](https://hyprland.org) ≥ 0.56, Lua config | `hypr/` |
 | Bar | Waybar (Tokyo Night OLED) | `waybar/` |
 | Notifications | SwayNC (matching theme) | `swaync/` |
 | Terminal | kitty | `kitty/` |
@@ -29,7 +29,7 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 - **Vim-motion window control** — `SUPER+hjkl` focus, `SUPER+SHIFT+hjkl` resize, `SUPER+CTRL+hjkl` move, `SUPER+R` enters a resize submap (border turns red until `Esc`).
 - **Keyboard mouse clicks** — `SUPER+CTRL+Space` / `SUPER+CTRL+x` left/right click via ydotool.
 - **Power modes on function keys** — `SUPER+F1..F4` switch battery-saver / balanced / performance profiles (cpupower + Intel P-State + TLP, wired through scoped sudoers rules in `etc/sudoers.d/`).
-- **Zen mode** — `SUPER+F5` locks you into the window you are working in. Entering a `zen` submap makes every global bind inactive at once — no launcher, no workspace switch, no window movement, no `SUPER`+drag; only `SUPER+F5` to leave, the XF86 hardware keys and the lock screen are re-declared inside it. Keybinds are only half of it, so a watcher on Hyprland's event socket snaps focus back when a click or a newly opened window takes it, which also drags you back from another workspace. New-tab and new-window keys are swallowed: `CTRL+SHIFT+T`/`N` and `ALT+TAB` always, and the plain `CTRL+T/N/L/TAB/1-9` group only when the locked window is a browser — in a terminal those are work keys. Notifications go quiet apart from the low-battery warning, which passes do-not-disturb on critical urgency. Border turns purple. It releases itself if the locked window closes, and rebuilds the submap if a config reload wipes it, so neither can lock you out. Leaving zen re-reads the config to restore the binds, which would otherwise hand the red tint and the current power mode's blur and animation settings back to the config — both live only at runtime — so it snapshots them across the reload.
+- **Zen mode** — `SUPER+F5` locks you into the window you are working in. Entering a `zen` submap makes every global bind inactive at once — no launcher, no workspace switch, no window movement, no `SUPER`+drag; only `SUPER+F5` to leave, the XF86 hardware keys and the lock screen are re-declared inside it. Keybinds are only half of it, so a watcher on Hyprland's event socket snaps focus back when a click or a newly opened window takes it, which also drags you back from another workspace. New-tab and new-window keys are swallowed: `CTRL+SHIFT+T`/`N` and `ALT+TAB` always, and the plain `CTRL+T/N/L/TAB/1-9` group only when the locked window is a browser — in a terminal those are work keys. Notifications go quiet apart from the low-battery warning, which passes do-not-disturb on critical urgency. Border turns purple. It releases itself if the locked window closes, and the submap is declared in the config (`hypr/lua/submaps.lua`) rather than built at runtime, so a config reload rebuilds it instead of emptying it — neither can lock you out. Leaving zen re-reads the config to restore the binds, which would otherwise hand the red tint and the current power mode's blur and animation settings back to the config — both live only at runtime — so it snapshots them across the reload.
 - **Low battery warning that goes away** — `bin/battery-low-warning --watch` runs as a systemd user service, blocking on `upower` events rather than polling. The warning is sticky by design (critical urgency, `timeout-critical: 0`), so it records its notification id and closes it over D-Bus the moment the charger goes in.
 - **OCR anywhere** — `SUPER+SHIFT+T` selects a region, runs tesseract, puts the text on the clipboard.
 - **Dropdown terminal** — `SUPER+SHIFT+Return`.
@@ -39,13 +39,39 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 - **Notifications** — `SUPER+`` ` `` toggles the SwayNC panel, `SUPER+SHIFT+`` ` `` clears.
 - **OLED pixel-shift** — the bar's contents drift 0–3px every 10 minutes, via a flash-free waybar style reload you will not notice.
 
+## Hyprland config is Lua
+
+Hyprland 0.56 deprecated the `.conf` format and 0.57 drops it, so `hypr/` is a
+Lua config: `hyprland.lua` requires the modules under `hypr/lua/`. Hyprland
+prefers `hyprland.lua` and only falls back to `hyprland.conf`, which is a shim
+onto `hypr/legacy-conf/` — the old tree, unchanged apart from its paths. Rename
+`hyprland.lua` and the next login comes up exactly as it did before.
+
+Two things changed for anything scripting the compositor:
+
+| Was | Is |
+| :--- | :--- |
+| `hyprctl keyword a:b <v>` | `hyprctl eval 'hl.config({a={b=<v>}})'`, wrapped by `bin/hlset` |
+| `hyprctl dispatch X Y` | `hyprctl dispatch 'hl.dsp.x.y(...)'` |
+
+`hyprctl getoption`, `clients`, `monitors`, `devices` and `reload` are
+unchanged. `hyprctl binds` now reports every dispatcher as an opaque `__lua`
+handle, so `bin/keys` (the `SUPER+/` cheatsheet) reads a registry that
+`hypr/lua/util.lua` keeps inside the compositor instead — which means it covers
+the default and laptop binds too, not just the personal ones.
+
+`Hyprland --verify-config -c hypr/hyprland.lua` type-checks the whole thing
+without touching the running session.
+
 ## Layout
 
 ```
 .
 ├── bin/            power modes, `afk` keep-awake, focus modes, `red` tint, battery warning, waybar pixel-shift
 ├── etc/sudoers.d/  scoped NOPASSWD rules the power scripts need
-├── hypr/           hyprland.conf + UserConfigs/ (keybinds, env, rules, startup)
+├── hypr/           hyprland.lua — the Hyprland config, in Lua
+│   ├── lua/        the config proper: binds, rules, look, settings, submaps
+│   ├── legacy-conf/ the pre-0.56 .conf tree, kept as a fallback
 │   ├── scripts/    helper scripts (refresh, screenshots, toggles, gamemode…)
 │   └── shaders/    red-tint night shader, driven by `bin/red`
 ├── kitty/          kitty.conf + themes (Tokyo Night OLED, gruvbox)

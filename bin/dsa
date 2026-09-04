@@ -102,9 +102,9 @@ close_mode() {
     local a1 a2 a3 a batch=""
     read -r a1 a2 a3 <"$STATE"
     for a in "$a1" "$a2" "$a3"; do
-        [[ -n $a ]] && have "$a" && batch+="dispatch closewindow address:$a ; "
+        [[ -n $a ]] && have "$a" && batch+="hl.dispatch(hl.dsp.window.close({window=\"address:$a\"})); "
     done
-    [[ -n $batch ]] && hyprctl --batch "$batch" >/dev/null
+    [[ -n $batch ]] && hyprctl eval "$batch" >/dev/null
     rm -f "$STATE"
     echo "$(date -Is) close" >>"$SESSIONS"
     dnd -df
@@ -116,13 +116,13 @@ open_mode() {
     if [[ -r $STATE ]]; then
         read -r a1 a2 a3 <"$STATE"
         if have "${a1:-}" && have "${a2:-}" && have "${a3:-}"; then
-            hyprctl dispatch focuswindow "address:$a1" >/dev/null
+            hyprctl dispatch "hl.dsp.focus({window=\"address:$a1\"})" >/dev/null
             return
         fi
         rm -f "$STATE"
     fi
 
-    hyprctl dispatch workspace empty >/dev/null
+    hyprctl dispatch 'hl.dsp.focus({workspace="empty"})' >/dev/null
     local ws
     ws=$(hyprctl activeworkspace -j | jq -r '.id')
 
@@ -151,13 +151,13 @@ open_mode() {
     a1=$(new_addr)
 
     # 2) NeetCode 150 — middle (preselect right so it always lands right of Claude)
-    hyprctl --batch "dispatch focuswindow address:$a1 ; dispatch layoutmsg preselect r" >/dev/null
+    hyprctl eval "hl.dispatch(hl.dsp.focus({window=\"address:$a1\"})); hl.dispatch(hl.dsp.layout(\"preselect r\"))" >/dev/null
     setsid -f google-chrome-stable --app='https://neetcode.io/practice?tab=neetcode150' >/dev/null 2>&1
     wait_for 2 100
     a2=$(new_addr "$a1")
 
     # 3) Terminal in ~/repos/dsa — right
-    hyprctl --batch "dispatch focuswindow address:$a2 ; dispatch layoutmsg preselect r" >/dev/null
+    hyprctl eval "hl.dispatch(hl.dsp.focus({window=\"address:$a2\"})); hl.dispatch(hl.dsp.layout(\"preselect r\"))" >/dev/null
     setsid -f kitty --directory "$HOME/repos/dsa" >/dev/null 2>&1
     wait_for 3 100
     a3=$(new_addr "$a1" "$a2")
@@ -168,7 +168,7 @@ open_mode() {
     third=$(hyprctl clients -j | jq --arg a1 "$a1" --arg a2 "$a2" --arg a3 "$a3" \
         '[.[] | select(.address==$a1 or .address==$a2 or .address==$a3) | .size[0]] | add / 3 | floor')
     cur=$(hyprctl clients -j | jq --arg a "$a1" '.[] | select(.address==$a) | .size[0]')
-    hyprctl --batch "dispatch focuswindow address:$a1 ; dispatch resizeactive $((third - cur)) 0 ; dispatch focuswindow address:$a3" >/dev/null
+    hyprctl eval "hl.dispatch(hl.dsp.focus({window=\"address:$a1\"})); hl.dispatch(hl.dsp.window.resize({x=$((third - cur)), y=0})); hl.dispatch(hl.dsp.focus({window=\"address:$a3\"}))" >/dev/null
 
     printf '%s %s %s\n' "$a1" "$a2" "$a3" >"$STATE"
     echo "$(date -Is) open" >>"$SESSIONS"

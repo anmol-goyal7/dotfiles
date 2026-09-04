@@ -36,8 +36,8 @@ bluetoothctl power on >/dev/null 2>&1 || true
 
 # --- 6. Hyprland: animations ON, blur ON ---
 step "Hyprland: animations ON, blur ON"
-hyprctl keyword animations:enabled 1              >/dev/null 2>&1 || true
-hyprctl keyword decoration:blur:enabled 1          >/dev/null 2>&1 || true
+# hyprctl keyword is gone in the Lua config; bin/hlset wraps hyprctl eval.
+hlset animations:enabled 1 decoration:blur:enabled 1 >/dev/null 2>&1 || true
 
 # --- 7. NMI watchdog default ---
 step "NMI watchdog: ON"

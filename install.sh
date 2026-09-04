@@ -41,6 +41,10 @@ link() {
 info "Installing dotfiles from $DOTFILES ..."
 echo ""
 
+# hypr/ is the Lua config (hyprland.lua + lua/), which needs Hyprland >= 0.56.
+# hypr/hyprland.conf and hypr/legacy-conf/ are the pre-migration .conf tree,
+# kept as a fallback: Hyprland prefers hyprland.lua and only reads the .conf if
+# the Lua file is not there.
 link "$DOTFILES/hypr"           "$CONFIG/hypr"
 link "$DOTFILES/kitty"          "$CONFIG/kitty"
 link "$DOTFILES/waybar"         "$CONFIG/waybar"
@@ -122,7 +126,8 @@ echo "     sudo cp $DOTFILES/etc/sudoers.d/power-modes /etc/sudoers.d/power-mode
 echo "     sudo chmod 440 /etc/sudoers.d/power-modes"
 echo ""
 echo "  5. Reload shell:    source ~/.zshrc"
-echo "  6. Reload Hyprland: SUPER+ALT+R  (or log out/in)"
+echo "  6. Log out and back in. Hyprland picks .conf vs .lua at startup, so a"
+echo "     reload (SUPER+ALT+R) will not switch an already-running session."
 echo ""
 echo "  Neovim: plugins auto-install on first launch, then run"
 echo "     :MasonInstall lua-language-server pyright bash-language-server"

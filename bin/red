@@ -23,6 +23,9 @@ set -u
 
 SHADER="$HOME/.config/hypr/shaders/red-tint.glsl"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/red-mode.state"
+SELF=$(readlink -f "$0")
+# By path, not by name: a Hyprland bind does not run under his shell's PATH.
+HLSET="${SELF%/*}/hlset"
 
 need_hypr() {
     if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
@@ -39,12 +42,12 @@ live() {
 }
 
 red_on() {
-    hyprctl keyword decoration:screen_shader "$SHADER" >/dev/null
+    "$HLSET" decoration:screen_shader "$SHADER" >/dev/null
     : >"$STATE"
 }
 
 red_off() {
-    hyprctl keyword decoration:screen_shader "" >/dev/null
+    "$HLSET" decoration:screen_shader "" >/dev/null
     rm -f "$STATE"
 }
 
@@ -57,7 +60,7 @@ status() {
 reapply() {
     [[ -e $STATE ]] || return 0
     [[ $(live) == "$SHADER" ]] && return 0
-    hyprctl keyword decoration:screen_shader "$SHADER" >/dev/null
+    "$HLSET" decoration:screen_shader "$SHADER" >/dev/null
 }
 
 case ${1:-on} in

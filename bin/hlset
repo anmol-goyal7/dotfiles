@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# hlset — set Hyprland config options at runtime.
+#
+#   hlset animations:enabled 0
+#   hlset decoration:blur:size 5 decoration:blur:passes 2
+#   hlset general:col.active_border 'rgba(7aa2f7cc)'
+#
+# This is the replacement for `hyprctl keyword`, which Hyprland 0.56 turned off
+# for the Lua config -- it answers "keyword can't work with non-legacy parsers.
+# Use eval." The Lua equivalent is a nested table, so
+#
+#   hyprctl keyword decoration:blur:size 5
+#
+# becomes
+#
+#   hyprctl eval 'hl.config({decoration={blur={size=5}}})'
+#
+# which is a lot to type at every call site. Option paths take ':' or '.' as
+# the separator, so the names that appear in `hyprctl getoption` work verbatim.
+#
+# Reading options has not changed: `hyprctl getoption <name>` still works.
+
+set -u
+
+if [[ $# -eq 0 || $(($# % 2)) -ne 0 ]]; then
+    echo "usage: hlset <option> <value> [<option> <value> ...]" >&2
+    exit 2
+fi
+
+# Numbers go through bare -- Hyprland coerces an integer to a bool where the
+# option wants one, but rejects a string where it wants a number.
+lua_value() {
+    local v=$1
+    if [[ $v =~ ^-?[0-9]+$ || $v =~ ^-?[0-9]*\.[0-9]+$ || $v == true || $v == false ]]; then
+        printf '%s' "$v"
+    else
+        v=${v//\\/\\\\}
+        v=${v//\"/\\\"}
+        printf '"%s"' "$v"
+    fi
+}
+
+code=''
+while [[ $# -gt 0 ]]; do
+    path=$1 value=$2
+    shift 2
+
+    IFS=':.' read -ra parts <<<"$path"
+    if [[ ${#parts[@]} -lt 2 ]]; then
+        echo "hlset: '$path' is not a section:option path" >&2
+        exit 2
+    fi
+
+    expr='hl.config({'
+    for ((i = 0; i < ${#parts[@]} - 1; i++)); do
+        expr+="${parts[i]}={"
+    done
+    expr+="${parts[-1]}=$(lua_value "$value")"
+    for ((i = 0; i < ${#parts[@]}; i++)); do
+        expr+='}'
+    done
+    expr+=')'
+
+    code+="$expr;"
+done
+
+hyprctl eval "$code"

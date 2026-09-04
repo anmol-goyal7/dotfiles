@@ -37,8 +37,8 @@ bluetoothctl power on >/dev/null 2>&1 || true
 
 # --- 6. Hyprland: kill animations & blur (frees GPU for the game) ---
 step "Hyprland: animations OFF, blur OFF"
-hyprctl keyword animations:enabled 0              >/dev/null 2>&1 || true
-hyprctl keyword decoration:blur:enabled 0          >/dev/null 2>&1 || true
+# hyprctl keyword is gone in the Lua config; bin/hlset wraps hyprctl eval.
+hlset animations:enabled 0 decoration:blur:enabled 0 >/dev/null 2>&1 || true
 
 # --- 7. NMI watchdog OFF (shave interrupt overhead) ---
 step "NMI watchdog: OFF"

@@ -147,7 +147,10 @@ start() {
     echo "   screen still blanks after 5m idle (OLED), wakes on keypress"
 
     if [[ $blank == 1 ]]; then
-        hyprctl dispatch dpms off >/dev/null 2>&1 || true
+        # Lua form first, pre-0.56 form as a fallback -- see hypr/hypridle.conf.
+        # hyprctl exits 0 even when it rejects a dispatcher, hence the grep.
+        hyprctl dispatch 'hl.dsp.dpms("off")' 2>/dev/null | grep -q '^ok' ||
+            hyprctl dispatch dpms off >/dev/null 2>&1 || true
         echo "   screen blanked (any keypress wakes it; system stays up)"
     fi
 }
