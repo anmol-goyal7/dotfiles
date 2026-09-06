@@ -132,8 +132,33 @@ hl.window_rule({
     float = true, pin = true, move = "72% 7%", keep_aspect_ratio = true,
 })
 
--- Do not dim or sleep behind a fullscreen video.
-hl.window_rule({ match = { fullscreen = true }, idle_inhibit = "fullscreen" })
+-- NO BLANKET FULLSCREEN IDLE-INHIBIT HERE, ON PURPOSE.
+--
+-- This used to be:
+--     hl.window_rule({ match = { fullscreen = true }, idle_inhibit = "fullscreen" })
+-- meant as "do not dim or sleep behind a fullscreen video". It does not say
+-- that. It says "behind ANY fullscreen window", and a fullscreen browser or
+-- kitty is the normal way this laptop gets used -- so the whole idle ladder
+-- silently died: no dim, no lock, no dpms-off, no suspend, for as long as one
+-- window happened to be fullscreen. On an OLED that is also a static image
+-- sitting on the same pixels for hours.
+--
+-- It fails silently and invisibly. Hyprland implements the rule at the
+-- COMPOSITOR level: it stops sending ext_idle_notifier events entirely, so
+-- hypridle never even sees an idle to skip. Nothing appears in any log --
+-- hypridle only logs "Ignoring from onIdled(), inhibit locks: N" for the
+-- dbus/logind kind, which this is not. To check it by hand:
+--     hyprctl clients -j | grep -c '"fullscreen": 1'      # any fullscreen win?
+--     hypridle -c <a config with a 5s listener that echoes>  # does it fire?
+-- No "Idled:" line while idle == something is inhibiting at the wayland level.
+--
+-- The rule was redundant anyway. Every player that matters already takes a
+-- REAL idle inhibitor, and only while media is actually playing: Chrome,
+-- Brave and Firefox via the wayland idle-inhibit protocol, mpv and vlc the
+-- same (mpv's --stop-screensaver, on by default). general{} in
+-- hypr/hypridle.conf sets ignore_dbus_inhibit = false, so hypridle honours
+-- the logind/dbus ones too. Video keeps the screen on; a paused video or a
+-- fullscreen text window no longer does.
 
 -- Floating
 hl.window_rule({ match = { tag = "KooL_Cheat" },    float = true })
