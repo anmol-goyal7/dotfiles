@@ -1,0 +1,9 @@
+[Unit]
+Description=Block social media sites in /etc/hosts
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/social-block on
+# Persistent=true replays runs missed while the laptop was off, so a boot at
+# noon would otherwise replay 22:00 and leave the block on all day. Re-check.
+ExecCondition=/bin/sh -c '[ $(date +%%-H) -ge 22 ] || [ $(date +%%-H) -lt 6 ]'

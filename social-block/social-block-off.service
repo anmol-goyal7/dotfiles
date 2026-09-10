@@ -1,0 +1,8 @@
+[Unit]
+Description=Unblock social media sites in /etc/hosts
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/social-block off
+# Mirror of the on-service guard: only unblock outside the 22:00-06:00 window.
+ExecCondition=/bin/sh -c '[ $(date +%%-H) -lt 22 ] && [ $(date +%%-H) -ge 6 ]'

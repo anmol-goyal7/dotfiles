@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# social-block on|off - null-route the sites that eat the night, via /etc/hosts.
+# Only ever rewrites the region between its own sentinel comments, so unrelated
+# entries in /etc/hosts survive untouched no matter how often this runs.
+set -euo pipefail
+
+HOSTS="${SOCIAL_BLOCK_HOSTS:-/etc/hosts}"   # override to dry-run against a copy
+BEGIN='# BEGIN social-block'
+END='# END social-block'
+
+# www. and m. variants are generated for each of these.
+SITES=(instagram.com linkedin.com x.com twitter.com reddit.com)
+
+# Short-link domains and alternate front doors for the same services. The
+# reddit ones matter most: old.reddit.com serves the site with reddit.com blocked.
+ALTS=(instagr.am lnkd.in t.co redd.it i.redd.it v.redd.it
+      old.reddit.com new.reddit.com np.reddit.com)
+
+usage() { echo "usage: ${0##*/} on|off" >&2; exit 2; }
+[[ $# -eq 1 && ( $1 == on || $1 == off ) ]] || usage
+[[ $EUID -eq 0 ]] || { echo "${0##*/}: needs root - try: sudo ${0##*/} $1" >&2; exit 1; }
+
+# Rebuild every run: drop the block we left behind, then re-add it only for
+# "on". That is what makes a repeated "on" idempotent instead of stacking.
+tmp=$(mktemp "$HOSTS.XXXXXX")   # same directory, so the mv below is atomic
+trap 'rm -f "$tmp"' EXIT
+sed "/^$BEGIN\$/,/^$END\$/d" "$HOSTS" > "$tmp"
+
+if [[ $1 == on ]]; then
+  { echo "$BEGIN"
+    for d in "${SITES[@]}"; do printf '0.0.0.0 %s www.%s m.%s\n' "$d" "$d" "$d"; done
+    printf '0.0.0.0 %s\n' "${ALTS[@]}"
+    echo "$END"
+  } >> "$tmp"
+fi
+
+# mktemp makes the file 0600. Handing that to /etc/hosts would break name
+# resolution for every non-root process on the machine, so restore the
+# original mode and owner before swapping it in.
+chmod --reference="$HOSTS" "$tmp"
+chown --reference="$HOSTS" "$tmp"
+cp -a "$HOSTS" "$HOSTS.bak"
+mv "$tmp" "$HOSTS"
+
+# nsswitch here is "resolve ... files", so systemd-resolved answers first and
+# serves what it already cached. It re-reads /etc/hosts on its own, but the
+# cache can still hand back the pre-block address, so drop it.
+command -v resolvectl >/dev/null && timeout 5 resolvectl flush-caches 2>/dev/null || true
+
+echo "social-block: $1"
