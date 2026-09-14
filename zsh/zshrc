@@ -187,6 +187,9 @@ function yy() {
 }
 export PATH="$HOME/.local/bin:$PATH"
 
+# PATH — ~/bin (exercism CLI)
+export PATH="$HOME/bin:$PATH"
+
 # =============================================================================
 # PROMPT — show current directory
 # =============================================================================
