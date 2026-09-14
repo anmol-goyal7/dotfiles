@@ -96,7 +96,7 @@ exec(mod .. " + E",      apps.files,   { desc = "file manager" })
 exec(mod .. " + B",      apps.browser, { desc = "browser" })
 exec(mod .. " + D",      "brave",      { desc = "Brave" })
 exec(mod .. " + P",      "zapzap",     { desc = "WhatsApp" })
-exec(mod .. " + T",      'zathura "' .. HOME .. '/Downloads/MR.pdf"', { desc = "open MR.pdf" })
+exec(mod .. " + T",      'google-chrome-stable "file://' .. HOME .. '/Downloads/MR.pdf"', { desc = "open MR.pdf" })
 bind(mod .. " + A",      hl.dsp.global("quickshell:overviewToggle"), { desc = "overview" })
 
 exec(mod .. " + SHIFT + Return", S .. "/Dropterminal.sh " .. apps.term, { desc = "drop-down terminal" })
