@@ -62,7 +62,7 @@ hl.config({
     misc = {
         disable_hyprland_logo    = true,
         disable_splash_rendering = true,
-        -- OLED: paint the desktop flat black rather than lighting a wallpaper.
+        -- OLED: flat black under the awww wallpaper (shows before it loads).
         background_color         = "rgb(000000)",
         vrr                      = 2,
         mouse_move_enables_dpms  = true,

@@ -1,8 +1,8 @@
 -- Commands run once when the session comes up.
 -- https://wiki.hypr.land/Configuring/Basics/Autostart/
 --
--- No wallpaper daemon: misc.background_color in lua/settings.lua paints the
--- desktop flat black, which is what an OLED panel wants.
+-- Wallpaper is a night shot via awww (mostly near-black, so OLED-friendly);
+-- misc.background_color in lua/settings.lua stays black underneath it.
 
 local apps = require("lua.apps")
 
@@ -19,6 +19,11 @@ hl.on("hyprland.start", function()
 
     -- Notifications.
     hl.exec_cmd("swaync")
+
+    -- Wallpaper: Golden Gate at night, cropped to 2880x1800 (16:10).
+    -- Photo: Christoph Strässler, CC BY-SA 2.0, via Wikimedia Commons.
+    hl.exec_cmd("awww-daemon")
+    hl.exec_cmd("bash -c 'until awww query >/dev/null 2>&1; do sleep 0.1; done; awww img ~/Pictures/wallpapers/golden-gate-night.jpg'")
 
     -- Bar. Killed first so a reload does not leave two running.
     hl.exec_cmd("bash -c 'pkill waybar; sleep 0.2 && waybar'")
