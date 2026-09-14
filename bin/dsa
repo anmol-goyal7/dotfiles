@@ -5,7 +5,7 @@
 #                Turns on swaync do-not-disturb while the mode is open.
 #   dsa close    close the mode's three windows, DND back off (Super+Shift+D)
 #   dsa streak   print "<streak-days> <yes|no> <focus-min-today>"
-#                (consumed by the quickshell wallpaper widget)
+#                (CLI only; the desktop widget was removed 2026-09-11)
 #   dsa stats    last-7-days practice summary in the terminal
 
 set -u
