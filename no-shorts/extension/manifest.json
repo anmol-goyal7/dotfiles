@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "no-shorts",
+  "version": "1.0.0",
+  "description": "Blocks YouTube Shorts and Instagram Reels. Installed by dotfiles/no-shorts/install.sh; install.sh stamps the version.",
+  "update_url": "file:///usr/local/share/no-shorts/update.xml",
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*", "*://*.instagram.com/*"],
+      "js": ["no-shorts.user.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

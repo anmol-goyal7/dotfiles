@@ -39,6 +39,7 @@ My personal configuration for **Arch Linux + Hyprland**, built around two ideas:
 - **Notifications** — `SUPER+`` ` `` toggles the SwayNC panel, `SUPER+SHIFT+`` ` `` clears.
 - **OLED pixel-shift** — the bar's contents drift 0–3px every 10 minutes, via a flash-free waybar style reload you will not notice.
 - **An idle ladder that always comes back** — dim at 2.5 min, lock at 4.5, screen off at 5, suspend at 10. The lock deliberately lands *before* the blank: hyprlock takes the `ext-session-lock` the moment it starts, and the protocol says a compositor whose lock client dies must keep painting black and keep swallowing input, so starting it onto an already-dark output was a way to end up at a screen only the power button could clear. The bigger trap was `hl.dsp.dpms("on")`: on 0.56.2 the Lua bridge **ignores the argument and toggles**, so the resume path fired it twice — once from the listener, once from `after_sleep_cmd` — and turned the screen back off every time the laptop woke. `bin/dpms on|off` reads the real state and only toggles when it differs; `bin/lock` supervises hyprlock and re-attaches a lock surface if it dies rather than leaving a dead one; `bin/screen-wake` undoes all three ways the screen can be left dark. If it ever wedges anyway: `Ctrl+Alt+F2`, log in, `screen-wake`, `Ctrl+Alt+F1`.
+- **No Shorts, no Reels, for good** — `sudo no-shorts/install.sh` blocks YouTube Shorts and Instagram Reels while the rest of both sites keeps working. There is no schedule and no off switch; `no-shorts/uninstall.sh` is the only way out. A managed-policy `URLBlocklist` in Chrome and Brave stops any full page load of `/shorts`, `/reels/` or `/reel/`, but both sites are single-page apps that move to a Short with `history.pushState`, which the blocklist never sees, so clicking a Short on the YouTube home page would sail straight past it. The same policy therefore force-installs a local extension (`no-shorts/extension/`, packed into `/usr/local/share/no-shorts/` and fed through a `file://` update manifest, which Chrome on Linux accepts without a web server) that cancels those in-app navigations, swallows clicks on Shorts/Reels links, bounces channel and profile Shorts/Reels tabs home, and hides the shelves and nav entries. A force-installed extension cannot be disabled or removed from `chrome://extensions`. Its signing key is generated on first install into root-only `/etc/no-shorts/` and never committed; it fixes the extension id the policy names. Firefox gets the URL block through `policies.json` (release Firefox refuses unsigned extensions), and qutebrowser runs the same script as a greasemonkey userscript. Incognito windows get the URL block but not the extension. Tests: `node --test 'no-shorts/tests/*.test.js'` and `bats no-shorts/tests`.
 - **The power button no longer shuts the laptop down** — `HandlePowerKey=ignore` in `etc/systemd/logind.conf.d/`. The instinctive move at a screen that will not wake is to tap power, and the default handling powers the machine off cleanly, losing whatever was open. Waking from S3 is a firmware job that happens on the keypress regardless, so ignoring the short press still wakes the machine — it just stops shutting it down while doing it. Deliberate shutdown stays on `CTRL+ALT+P` (wlogout).
 
 ## Hyprland config is Lua
@@ -80,6 +81,7 @@ without touching the running session.
 │   ├── scripts/    helper scripts (refresh, screenshots, toggles, gamemode…)
 │   └── shaders/    red-tint night shader, driven by `bin/red`
 ├── kitty/          kitty.conf + themes (Tokyo Night OLED, gruvbox)
+├── no-shorts/      browser policy + force-installed extension blocking YouTube Shorts / Instagram Reels
 ├── nvim/           init.lua, plugins, keymaps (lazy.nvim)
 ├── swaync/         notification center — Tokyo Night OLED
 ├── systemd/user/   the low-battery warning service
@@ -111,6 +113,9 @@ sudo usermod -aG input $USER
 # power modes — review the rules first, then:
 sudo cp etc/sudoers.d/power-modes /etc/sudoers.d/power-modes
 sudo chmod 440 /etc/sudoers.d/power-modes
+
+# no YouTube Shorts / Instagram Reels (re-run after editing no-shorts/extension/)
+sudo no-shorts/install.sh
 ```
 
 **Fonts:** `ttf-fantasque-nerd` (bar + notifications), `ttf-hack` (terminal), `ttf-jetbrains-mono`.

@@ -68,6 +68,11 @@ link "$DOTFILES/bin/battery-low-warning" "$HOME/.local/bin/battery-low-warning"
 link "$DOTFILES/systemd/user/battery-low-warning.service" \
      "$CONFIG/systemd/user/battery-low-warning.service"
 
+# qutebrowser has no policy to lock, so no-shorts reaches it only as a
+# greasemonkey script: the same file the Chrome/Brave extension runs.
+link "$DOTFILES/no-shorts/extension/no-shorts.user.js" \
+     "$HOME/.local/share/qutebrowser/greasemonkey/no-shorts.user.js"
+
 link "$DOTFILES/zsh/zshrc"      "$HOME/.zshrc"
 link "$DOTFILES/tmux/tmux.conf" "$HOME/.tmux.conf"
 
@@ -132,8 +137,11 @@ echo "       /etc/systemd/logind.conf.d/10-power-key.conf"
 echo "     Takes effect at the next boot — logind has no ExecReload, and"
 echo "     restarting it under a live Hyprland can take libseat down with it."
 echo ""
-echo "  6. Reload shell:    source ~/.zshrc"
-echo "  7. Log out and back in. Hyprland picks .conf vs .lua at startup, so a"
+echo "  6. No YouTube Shorts / Instagram Reels, permanently (Chrome, Brave, Firefox):"
+echo "     sudo $DOTFILES/no-shorts/install.sh"
+echo ""
+echo "  7. Reload shell:    source ~/.zshrc"
+echo "  8. Log out and back in. Hyprland picks .conf vs .lua at startup, so a"
 echo "     reload (SUPER+ALT+R) will not switch an already-running session."
 echo ""
 echo "  Neovim: plugins auto-install on first launch, then run"
