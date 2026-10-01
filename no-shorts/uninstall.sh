@@ -24,7 +24,8 @@ if [[ -f $D$FIREFOX_POLICY ]]; then
       .policies.WebsiteFilter.Block -= [
         "*://*.youtube.com/shorts*", "*://*.youtube.com/*/shorts*",
         "*://*.instagram.com/reels/*", "*://*.instagram.com/reel/*",
-        "*://*.instagram.com/*/reels/*", "*://*.instagram.com/*/reel/*"
+        "*://*.instagram.com/*/reels/*", "*://*.instagram.com/*/reel/*",
+        "*://*.instagram.com/*", "*://*.instagr.am/*"
       ]
       | if .policies.WebsiteFilter.Block == [] then del(.policies.WebsiteFilter.Block) else . end
       | if .policies.WebsiteFilter == {} then del(.policies.WebsiteFilter) else . end

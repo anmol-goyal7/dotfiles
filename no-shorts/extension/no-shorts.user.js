@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name        no-shorts
-// @description Blocks YouTube Shorts and Instagram Reels; the rest of both sites keeps working.
+// @description Blocks YouTube Shorts (the rest of YouTube keeps working) and all of Instagram.
 // @match       *://*.youtube.com/*
 // @match       *://*.instagram.com/*
 // @run-at      document-start
@@ -22,8 +22,6 @@
 
   // /shorts/ID, and the Shorts tab of a channel or hashtag page.
   const YOUTUBE = /^\/(?:(?:@[^/]+|(?:channel|c|user|hashtag)\/[^/]+)\/)?shorts(?:\/|$)/;
-  // /reels/, /reel/ID, and a profile's Reels tab. /reelhouse/ is a username.
-  const INSTAGRAM = /^\/(?:[^/]+\/)?reels?(?:\/|$)/;
 
   const onSite = (host, site) => host === site || host.endsWith('.' + site);
 
@@ -35,7 +33,8 @@
       return false;
     }
     if (onSite(url.hostname, 'youtube.com')) return YOUTUBE.test(url.pathname);
-    if (onSite(url.hostname, 'instagram.com')) return INSTAGRAM.test(url.pathname);
+    // Instagram is blocked whole, DMs and all.
+    if (onSite(url.hostname, 'instagram.com') || onSite(url.hostname, 'instagr.am')) return true;
     return false;
   }
 
@@ -65,11 +64,17 @@
       ytm-rich-item-renderer:has(a[href^="/shorts/"]),
       ytm-video-with-context-renderer:has(a[href^="/shorts/"])
       { display: none !important; }`,
-    'instagram.com': `
-      a[href="/reels/"],
-      a[href$="/reels/"][role="tab"]
-      { display: none !important; }`,
   };
+
+  // A whole-site block has no home page to fall back to, so it gets a dead
+  // page instead. The policy already does this in Chrome, Brave and Firefox;
+  // this is for qutebrowser.
+  if (isBlocked(location.origin + '/')) {
+    window.stop();
+    document.documentElement.innerHTML =
+      '<body style="background:#000;color:#888;font:16px sans-serif;padding:2em">Blocked by no-shorts.</body>';
+    return;
+  }
 
   const site = Object.keys(CSS).find((s) => onSite(location.hostname, s));
   const style = document.createElement('style');

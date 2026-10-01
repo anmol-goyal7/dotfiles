@@ -21,6 +21,12 @@ const blocked = [
   'https://instagram.com/reel/C9abc123/?igsh=xyz',
   'https://www.instagram.com/natgeo/reels/',
   'https://www.instagram.com/natgeo/reel/C9abc123/',
+  'https://www.instagram.com/',
+  'https://www.instagram.com/p/C9abc123/',
+  'https://www.instagram.com/natgeo/',
+  'https://www.instagram.com/direct/inbox/',
+  'https://www.instagram.com/stories/natgeo/123/',
+  'https://instagr.am/p/C9abc123/',
 ];
 
 const allowed = [
@@ -33,16 +39,11 @@ const allowed = [
   'https://www.youtube.com/@shortsmaker/videos',
   'https://www.youtube.com/feed/subscriptions',
   'https://www.youtube.com/playlist?list=PL123',
-  'https://www.instagram.com/',
-  'https://www.instagram.com/p/C9abc123/',
-  'https://www.instagram.com/natgeo/',
-  'https://www.instagram.com/reelhouse/',
-  'https://www.instagram.com/direct/inbox/',
-  'https://www.instagram.com/stories/natgeo/123/',
   'https://example.com/shorts/dQw4w9WgXcQ',
   'https://notyoutube.com/shorts/dQw4w9WgXcQ',
   'https://youtube.com.evil.example/shorts/dQw4w9WgXcQ',
   'https://example.com/reels/',
+  'https://notinstagram.com/',
   'not a url',
   '',
 ];

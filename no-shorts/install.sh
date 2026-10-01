@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Blocks YouTube Shorts and Instagram Reels in Chrome, Brave and Firefox for
+# Blocks YouTube Shorts and all of Instagram in Chrome, Brave and Firefox for
 # good: no schedule, no off switch, and neither browser lets you remove it.
 #   sudo ./install.sh        install, or upgrade after editing extension/
 #   sudo ./uninstall.sh      the only way back out
@@ -14,10 +14,15 @@ FIREFOX_POLICY=/etc/firefox/policies/policies.json
 D=${DESTDIR:-}
 
 # Chrome's blocklist matches host (subdomains included) plus a path prefix.
-URLS='["youtube.com/shorts", "instagram.com/reels/", "instagram.com/reel/"]'
+URLS='["youtube.com/shorts", "instagram.com", "instagr.am"]'
 # Firefox's WebsiteFilter takes match patterns, and *.host covers the bare host.
 FIREFOX_URLS='[
   "*://*.youtube.com/shorts*", "*://*.youtube.com/*/shorts*",
+  "*://*.instagram.com/*", "*://*.instagr.am/*"
+]'
+
+# What installs before Instagram was blocked whole added; upgrades drop it.
+OLD_FIREFOX_URLS='[
   "*://*.instagram.com/reels/*", "*://*.instagram.com/reel/*",
   "*://*.instagram.com/*/reels/*", "*://*.instagram.com/*/reel/*"
 ]'
@@ -78,8 +83,8 @@ jq -n --argjson urls "$URLS" --arg id "$id" --arg update "file://$SHARE/update.x
 
 # Merged, not overwritten: policies.json is one file shared by every policy.
 if [[ -f $D$FIREFOX_POLICY ]]; then cp "$D$FIREFOX_POLICY" "$stage/firefox.json"; else echo '{}' > "$stage/firefox.json"; fi
-jq --argjson urls "$FIREFOX_URLS" \
-  '.policies.WebsiteFilter.Block = ((.policies.WebsiteFilter.Block // []) + $urls | unique)' \
+jq --argjson urls "$FIREFOX_URLS" --argjson reels "$OLD_FIREFOX_URLS" \
+  '.policies.WebsiteFilter.Block = ((.policies.WebsiteFilter.Block // []) - $reels + $urls | unique)' \
   "$stage/firefox.json" > "$stage/firefox.new"
 
 install -Dm644 "$stage/ext.crx"     "$D$SHARE/no-shorts.crx"

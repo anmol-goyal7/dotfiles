@@ -22,7 +22,7 @@ key_id() {
   [ "$status" -eq 0 ]
   id=$(key_id)
   run jq -e --arg id "$id" '
-    (.URLBlocklist | index("youtube.com/shorts") and index("instagram.com/reels/") and index("instagram.com/reel/"))
+    (.URLBlocklist | index("youtube.com/shorts") and index("instagram.com") and index("instagr.am"))
     and .ExtensionSettings[$id].installation_mode == "force_installed"
     and .ExtensionSettings[$id].update_url == "file:///usr/local/share/no-shorts/update.xml"
   ' "$CHROME"
@@ -62,8 +62,16 @@ key_id() {
   "$ROOT/install.sh"
   run jq -e '
     .policies.DisableTelemetry
-    and (.policies.WebsiteFilter.Block | index("*://*.tiktok.com/*") and index("*://*.youtube.com/shorts*") and index("*://*.instagram.com/reel/*"))
+    and (.policies.WebsiteFilter.Block | index("*://*.tiktok.com/*") and index("*://*.youtube.com/shorts*") and index("*://*.instagram.com/*"))
   ' "$FIREFOX"
+  [ "$status" -eq 0 ]
+}
+
+@test "upgrading firefox from the reels-only patterns drops them" {
+  mkdir -p "${FIREFOX%/*}"
+  echo '{"policies":{"WebsiteFilter":{"Block":["*://*.instagram.com/reel/*","*://*.tiktok.com/*"]}}}' > "$FIREFOX"
+  "$ROOT/install.sh"
+  run jq -e '.policies.WebsiteFilter.Block | (index("*://*.instagram.com/reel/*") | not) and index("*://*.tiktok.com/*")' "$FIREFOX"
   [ "$status" -eq 0 ]
 }
 
