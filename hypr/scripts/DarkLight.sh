@@ -7,7 +7,6 @@
 wallpaper_base_path="$HOME/Pictures/wallpapers/Dynamic-Wallpapers"
 dark_wallpapers="$wallpaper_base_path/Dark"
 light_wallpapers="$wallpaper_base_path/Light"
-hypr_config_path="$HOME/.config/hypr"
 swaync_style="$HOME/.config/swaync/style.css"
 ags_style="$HOME/.config/ags/user/style.css"
 SCRIPTSDIR="$HOME/.config/hypr/scripts"
@@ -37,11 +36,9 @@ effect="--transition-bezier .43,1.19,1,.4 --transition-fps 60 --transition-type 
 if [ "$(cat $HOME/.cache/.theme_mode)" = "Light" ]; then
     next_mode="Dark"
     # Logic for Dark mode
-    wallpaper_path="$dark_wallpapers"
 else
     next_mode="Light"
     # Logic for Light mode
-    wallpaper_path="$light_wallpapers"
 fi
 
 # Function to update theme mode for the next cycle
@@ -141,8 +138,14 @@ else
     #qt6ct_color_scheme="$HOME/.config/qt6ct/colors/Catppuccin-Latte.conf"
 fi
 
-sed -i "s|^color_scheme_path=.*$|color_scheme_path=$qt5ct_color_scheme|" "$HOME/.config/qt5ct/qt5ct.conf"
-sed -i "s|^color_scheme_path=.*$|color_scheme_path=$qt6ct_color_scheme|" "$HOME/.config/qt6ct/qt6ct.conf"
+# The qt5ct/qt6ct schemes above are commented out; writing the unset variables
+# would blank color_scheme_path in both configs on every toggle.
+if [ -n "${qt5ct_color_scheme:-}" ]; then
+    sed -i "s|^color_scheme_path=.*$|color_scheme_path=$qt5ct_color_scheme|" "$HOME/.config/qt5ct/qt5ct.conf"
+fi
+if [ -n "${qt6ct_color_scheme:-}" ]; then
+    sed -i "s|^color_scheme_path=.*$|color_scheme_path=$qt6ct_color_scheme|" "$HOME/.config/qt6ct/qt6ct.conf"
+fi
 kvantummanager --set "$kvantum_theme"
 
 
