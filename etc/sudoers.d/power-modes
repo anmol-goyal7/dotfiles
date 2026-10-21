@@ -2,10 +2,15 @@
 # SUDOERS — passwordless power management for anmol
 # Install: sudo cp ~/repos/dotfiles/etc/sudoers.d/power-modes /etc/sudoers.d/power-modes
 #          sudo chmod 440 /etc/sudoers.d/power-modes
+# On another machine: replace the user "anmol" and the Wi-Fi interface
+# "wlp0s20f3" (see `iw dev`) below, and in bin/powermode for the interface.
 # =============================================================================
 
-# CPU governor via cpupower
-anmol ALL=(ALL) NOPASSWD: /usr/bin/cpupower frequency-set *
+# CPU governor via cpupower: exactly the calls bin/saver, balance,
+# performance and game make, not any frequency-set arguments
+anmol ALL=(ALL) NOPASSWD: /usr/bin/cpupower frequency-set -g powersave
+anmol ALL=(ALL) NOPASSWD: /usr/bin/cpupower frequency-set -g performance
+anmol ALL=(ALL) NOPASSWD: /usr/bin/cpupower frequency-set -g powersave -d 400MHz -u 2GHz
 
 # Intel P-State tuning
 anmol ALL=(ALL) NOPASSWD: /usr/bin/tee /sys/devices/system/cpu/intel_pstate/no_turbo
