@@ -7,6 +7,7 @@ config_file="$HOME/.config/hypr/UserConfigs/01-UserDefaults.conf"
 
 tmp_config_file=$(mktemp)
 sed 's/^\$//g; s/ = /=/g' "$config_file" > "$tmp_config_file"
+# shellcheck source=/dev/null
 source "$tmp_config_file"
 # ##################################### #
 
@@ -18,7 +19,6 @@ rofi_theme="$HOME/.config/rofi/config-edit.rasi"
 msg=' ⁉️ Choose what to do ⁉️'
 iDIR="$HOME/.config/swaync/images"
 scriptsDir="$HOME/.config/hypr/scripts"
-UserScripts="$HOME/.config/hypr/UserScripts"
 
 # Function to display the menu options without numbers
 menu() {
@@ -106,6 +106,7 @@ main() {
 
     # Open the selected file in the terminal with the text editor
     if [ -n "$file" ]; then
+        # shellcheck disable=SC2154  # term and edit come from the sourced UserDefaults
         "$term" -e "$edit" "$file"
     fi
 }

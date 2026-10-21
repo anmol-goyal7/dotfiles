@@ -65,7 +65,7 @@ check() {
 }
 
 watch_forever() {
-    local rc line
+    local rc
     if command -v upower >/dev/null; then
         exec 3< <(exec upower --monitor 2>/dev/null)
     else
@@ -74,7 +74,7 @@ watch_forever() {
 
     check
     while :; do
-        read -r -t "$HEARTBEAT" line <&3
+        read -r -t "$HEARTBEAT" _ <&3
         rc=$?
         if ((rc > 128)); then
             : # heartbeat expired — re-check anyway
@@ -86,7 +86,7 @@ watch_forever() {
         else
             # upower emits several events per change; let the burst settle so a
             # single plug-in does not trigger a handful of checks.
-            while read -r -t 0.3 line <&3; do :; done
+            while read -r -t 0.3 _ <&3; do :; done
         fi
         check
     done

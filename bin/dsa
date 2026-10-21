@@ -76,8 +76,8 @@ stats() {
         wmin=$((wmin + m)); wsess=$((wsess + s))
     done
 
-    local s_n s_today s_min best tot_s tot_m
-    read -r s_n s_today s_min <<<"$(streak)"
+    local s_n s_today best tot_s tot_m
+    read -r s_n s_today _ <<<"$(streak)"
     [[ $s_today == yes ]] && s_today='✓' || s_today='not yet'
     best=$(awk '/ open$/ { print substr($1, 1, 10) }' "$SESSIONS" 2>/dev/null | sort -u |
         awk -F- '{ t = mktime($1 " " $2 " " $3 " 12 0 0")

@@ -29,7 +29,8 @@ link() {
   fi
 
   if [ -e "$dst" ] || [ -L "$dst" ]; then
-    local bak="${dst}.bak.$(date +%Y%m%d_%H%M%S)"
+    local bak
+    bak="${dst}.bak.$(date +%Y%m%d_%H%M%S)"
     warn "Backing up $dst -> $bak"
     mv "$dst" "$bak"
   fi

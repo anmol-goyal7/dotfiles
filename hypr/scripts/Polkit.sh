@@ -16,19 +16,14 @@ polkit=(
   "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1"
 )
 
-executed=false
 
 # Loop through the list of paths
 for file in "${polkit[@]}"; do
   if [ -e "$file" ] && [ ! -d "$file" ]; then
     echo "Found: $file — executing..."
-    exec "$file"
-    executed=true
-    break
+    exec "$file"  # replaces this shell; nothing after it runs
   fi
 done
 
-# Fallback message if nothing executed
-if [ "$executed" == false ]; then
-  echo "No valid Polkit agent found. Please install one."
-fi
+# Only reached when no agent was found: exec never returns.
+echo "No valid Polkit agent found. Please install one."

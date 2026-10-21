@@ -51,7 +51,8 @@ apply_rofi_theme_to_config() {
 
   # Prune old commented-out theme lines to prevent clutter
   local max_lines=10
-  local total_lines=$(grep -c '^//\s*@theme' "$ROFI_CONFIG_FILE")
+  local total_lines
+  total_lines=$(grep -c '^//\s*@theme' "$ROFI_CONFIG_FILE")
   if [ "$total_lines" -gt "$max_lines" ]; then
     local excess=$((total_lines - max_lines))
     for ((i = 1; i <= excess; i++)); do

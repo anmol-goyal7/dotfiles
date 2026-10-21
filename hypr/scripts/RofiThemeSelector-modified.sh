@@ -8,7 +8,6 @@
 iDIR="$HOME/.config/swaync/images"
 
 
-OS="linux"
 
 ROFI=$(command -v rofi)
 SED=$(command -v sed)
@@ -112,7 +111,7 @@ add_theme_to_config() {
 
     if [ "$total_lines" -gt "$max_lines" ]; then
         excess=$((total_lines - max_lines))
-        for i in $(seq 1 "$excess"); do
+        for _ in $(seq 1 "$excess"); do
             $SED -i '0,/^\s*\/\/@theme/ { /^\s*\/\/@theme/ {d; q; }}' "$rofi_config_file"
         done
         echo "Removed excess //@theme lines"
@@ -136,7 +135,7 @@ create_theme_list()
 {
     OLDIFS=${IFS}
     IFS='|'
-    for themen in ${theme_names[@]}
+    for themen in "${theme_names[@]}"
     do
         echo "${themen}"
     done
@@ -152,24 +151,25 @@ select_theme()
 {
     local MORE_FLAGS=(-dmenu -format i -no-custom -p "Theme" -markup -config "${TMP_CONFIG_FILE}" -i)
     MORE_FLAGS+=(-kb-custom-1 "Alt-a")
+    # shellcheck disable=SC2054  # "2,3" and "4,5" are rofi row lists, not separators
     MORE_FLAGS+=(-u 2,3 -a 4,5 )
     local CUR="default"
     while true
     do
         declare -i RTR
         declare -i RES
-        local MESG="""You can preview themes by hitting <b>Enter</b>.
+        local MESG="You can preview themes by hitting <b>Enter</b>.
 <b>Alt-a</b> to accept the new theme.
 <b>Escape</b> to cancel
 Current theme: <b>${CUR}</b>
 <span weight=\"bold\" size=\"xx-small\">When setting a new theme this will override previous theme settings.
-Please update your config file if you have local modifications.</span>"""
+Please update your config file if you have local modifications.</span>"
         THEME_FLAG=
         if [ -n "${SELECTED}" ]
         then
             THEME_FLAG="-theme ${themes[${SELECTED}]}"
         fi
-        RES=$( create_theme_list | ${ROFI} ${THEME_FLAG} ${MORE_FLAGS[@]} -cycle -selected-row "${SELECTED}" -mesg "${MESG}")
+        RES=$( create_theme_list | ${ROFI} ${THEME_FLAG} "${MORE_FLAGS[@]}" -cycle -selected-row "${SELECTED}" -mesg "${MESG}")
         RTR=$?
         if [ "${RTR}" = 10 ]
         then

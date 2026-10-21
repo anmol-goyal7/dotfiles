@@ -70,7 +70,7 @@ echo "Launched '$APP' with PID $pid" >> "$LOGFILE"
 
 # Wait for the application window to appear (matching window class).
 # Чекаємо появи вікна аплікації (за класом вікна).
-for i in {1..30}; do
+for _ in {1..30}; do
     win=$(hyprctl clients -j | jq -r --arg APP "$APP" '
         .[] | select(.class | test($APP;"i")) | .address' 2>>"$LOGFILE")
 

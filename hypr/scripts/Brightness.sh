@@ -2,7 +2,6 @@
 # /* ---- 💫 https://github.com/JaKooLit 💫 ---- */  ##
 # Script for Monitor backlights (if supported) using brightnessctl
 
-notification_timeout=1000
 step=10  # INCREASE/DECREASE BY THIS VALUE
 
 # Get current brightness as an integer (without %)
