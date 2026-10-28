@@ -96,6 +96,8 @@ exec(mod .. " + E",      apps.files,   { desc = "file manager" })
 exec(mod .. " + B",      apps.browser, { desc = "browser" })
 exec(mod .. " + D",      "brave",      { desc = "Brave" })
 exec(mod .. " + P",      "zapzap",     { desc = "WhatsApp" })
+hl.unbind(mod .. " + G") -- was group toggle in binds.lua
+exec(mod .. " + G",      "spotify",    { desc = "Spotify" })
 exec(mod .. " + T",      'google-chrome-stable --new-window "file://' .. HOME .. '/Downloads/MR.pdf"', { desc = "open MR.pdf" })
 bind(mod .. " + A",      hl.dsp.global("quickshell:overviewToggle"), { desc = "overview" })
 
