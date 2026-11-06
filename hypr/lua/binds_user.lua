@@ -96,6 +96,7 @@ exec(mod .. " + E",      apps.files,   { desc = "file manager" })
 exec(mod .. " + B",      apps.browser, { desc = "browser" })
 exec(mod .. " + D",      "brave",      { desc = "Brave" })
 exec(mod .. " + P",      "zapzap",     { desc = "WhatsApp" })
+exec(mod .. " + C",      "claude-desktop", { desc = "Claude desktop" })
 hl.unbind(mod .. " + G") -- was group toggle in binds.lua
 exec(mod .. " + G",      "spotify",    { desc = "Spotify" })
 exec(mod .. " + T",      'google-chrome-stable --new-window "file://' .. HOME .. '/Downloads/MR.pdf"', { desc = "open MR.pdf" })
