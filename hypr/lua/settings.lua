@@ -8,8 +8,7 @@ hl.config({
     },
 
     dwindle = {
-        preserve_split       = true,
-        special_scale_factor = 0.8,
+        preserve_split = true,
     },
 
     master = {
@@ -115,4 +114,12 @@ hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
 hl.device({
     name    = "asue1209:00-04f3:319f-touchpad",
     enabled = true,
+})
+
+-- Special workspaces (scratchpad) at ~80% size. Replaces the deprecated
+-- dwindle.special_scale_factor = 0.8 (removed in 0.57): 10% margin per side
+-- of the 1728x1080 logical eDP-1.
+hl.workspace_rule({
+    workspace = "s[true]",
+    gaps_out  = { top = 108, right = 173, bottom = 108, left = 173 },
 })
