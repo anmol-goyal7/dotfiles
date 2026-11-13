@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# hdr — flip the internal OLED (eDP-1) between SDR and HDR, to judge by eye.
+#
+#   hdr            same as `hdr toggle`
+#   hdr on         BT.2020 + PQ, using Hyprland's default luminances
+#   hdr edid       same, but with the primaries/luminances the panel's EDID claims
+#   hdr wide       wide gamut only, SDR transfer (more saturated, not HDR)
+#   hdr off        back to sRGB
+#   hdr try [N]    HDR for N seconds (default 20), then back to sRGB on its own —
+#                  use this first: if the picture is unusable you just wait
+#   hdr status     print the live colour preset and scanout format
+#
+# Knobs, as env vars, for tuning how SDR content (the desktop, normal video)
+# looks while HDR is on — these only apply to `on`/`edid`/`try`:
+#
+#   HDR_SDR_BRIGHTNESS=1.2 HDR_SDR_SATURATION=1.1 hdr on
+#
+# Nothing here is persistent. The mode is set at runtime, so ANY config reload
+# (saving a file under hypr/, leaving zen/game mode, `hyprctl reload`) puts
+# eDP-1 back to what lua/monitors.lua says: 10-bit sRGB. That is the escape
+# hatch too. To keep HDR for good, add `cm = "hdr"` to that file instead.
+#
+# Why it is manual: render.cm_auto_hdr never actually switches this panel on
+# Hyprland 0.57.2 and only made fullscreen video washed-out, so it is off (see
+# lua/settings.lua).
+
+set -u
+
+OUT="eDP-1"
+SCALE="1.6666666"   # keep in step with lua/monitors.lua
+
+if ! command -v hyprctl >/dev/null || [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+    echo "hdr: needs a running Hyprland session" >&2
+    exit 1
+fi
+
+preset() { hyprctl monitors | awk -F': ' '/colorManagementPreset/ {print $2; exit}'; }
+format() { hyprctl monitors | awk -F': ' '/currentFormat/ {print $2; exit}'; }
+
+apply() {   # apply <cm>
+    local cm=$1 extra=""
+    if [[ $cm == hdr* ]]; then
+        extra=", sdrbrightness = ${HDR_SDR_BRIGHTNESS:-1.0}, sdrsaturation = ${HDR_SDR_SATURATION:-1.0}"
+    fi
+    hyprctl eval "hl.monitor({ output = \"$OUT\", mode = \"preferred\", position = \"auto\", scale = $SCALE, bitdepth = 10, cm = \"$cm\"$extra })" >/dev/null || {
+        echo "hdr: Hyprland rejected cm=$cm" >&2
+        return 1
+    }
+    sleep 1
+    echo "eDP-1: $(preset), $(format)"
+}
+
+case "${1:-toggle}" in
+    on)     apply hdr ;;
+    edid)   apply hdredid ;;
+    wide)   apply wide ;;
+    off)    apply srgb ;;
+    toggle) if [[ $(preset) == srgb ]]; then apply hdr; else apply srgb; fi ;;
+    try)
+        secs=${2:-20}
+        apply hdr || exit 1
+        echo "back to sRGB in ${secs}s (Ctrl+C keeps HDR on; \`hdr off\` to leave)"
+        sleep "$secs" && apply srgb
+        ;;
+    status) echo "eDP-1: $(preset), $(format)" ;;
+    *)      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

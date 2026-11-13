@@ -8,8 +8,7 @@ hl.config({
     },
 
     dwindle = {
-        preserve_split       = true,
-        special_scale_factor = 0.8,
+        preserve_split = true,
     },
 
     master = {
@@ -88,7 +87,16 @@ hl.config({
         force_zero_scaling = true,
     },
 
-    render = { direct_scanout = 0 },
+    render = {
+        direct_scanout = 0,
+        -- cm_auto_hdr = 1 (the default) tells every FULLSCREEN surface that
+        -- the preferred format is BT.2020/PQ. Brave/Chrome obey and re-encode
+        -- the video as PQ, but eDP-1 never actually leaves sRGB (checked at 8
+        -- and 10 bit on 0.57.2), so Hyprland tone-maps PQ back to SDR and
+        -- fullscreen video comes out washed-out. 0 keeps fullscreen in sRGB,
+        -- pixel-identical to windowed.
+        cm_auto_hdr = 0,
+    },
 
     cursor = {
         sync_gsettings_theme      = true,
@@ -106,4 +114,12 @@ hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
 hl.device({
     name    = "asue1209:00-04f3:319f-touchpad",
     enabled = true,
+})
+
+-- Special workspaces (scratchpad) at ~80% size. Replaces the deprecated
+-- dwindle.special_scale_factor = 0.8 (removed in 0.57): 10% margin per side
+-- of the 1728x1080 logical eDP-1.
+hl.workspace_rule({
+    workspace = "s[true]",
+    gaps_out  = { top = 108, right = 173, bottom = 108, left = 173 },
 })
