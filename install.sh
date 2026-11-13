@@ -69,6 +69,12 @@ link "$DOTFILES/bin/battery-low-warning" "$HOME/.local/bin/battery-low-warning"
 link "$DOTFILES/systemd/user/battery-low-warning.service" \
      "$CONFIG/systemd/user/battery-low-warning.service"
 
+# Push-to-talk dictation (Super+Y). The binds call ~/scripts/ptt-*.sh.
+# Needs: whisper-cpp ggml-vulkan wtype pipewire, and the model at
+# ~/.local/share/whisper/ggml-small.en.bin (huggingface ggerganov/whisper.cpp).
+link "$DOTFILES/bin/ptt-start.sh" "$HOME/scripts/ptt-start.sh"
+link "$DOTFILES/bin/ptt-stop.sh"  "$HOME/scripts/ptt-stop.sh"
+
 # qutebrowser has no policy to lock, so no-shorts reaches it only as a
 # greasemonkey script: the same file the Chrome/Brave extension runs.
 link "$DOTFILES/no-shorts/extension/no-shorts.user.js" \
