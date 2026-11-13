@@ -24,6 +24,19 @@ exec(mod .. " + SHIFT + T",
     { desc = "OCR a region to the clipboard" })
 
 -- ---------------------------------------------------------------------------
+-- Push-to-talk dictation: hold Super+Y and speak, release to type it + Enter
+-- ---------------------------------------------------------------------------
+-- Transcribed locally by whisper.cpp (bin/ptt-stop.sh). Not `repeating`, and
+-- ptt-start.sh ignores a press while a take is live, so key repeat is inert.
+exec(mod .. " + Y", HOME .. "/scripts/ptt-start.sh", { desc = "dictation: hold to record" })
+exec(mod .. " + Y", HOME .. "/scripts/ptt-stop.sh",  { release = true, desc = "dictation: release to type" })
+-- Let go of Super before Y and the Super+Y release never matches (the mods are
+-- read at release time), leaving the mic open. Catch that on Super's own
+-- release; with no take running, ptt-stop.sh exits at once.
+exec(mod .. " + Super_L", HOME .. "/scripts/ptt-stop.sh",
+    { release = true, non_consuming = true, desc = "dictation: stop if Super is let go first" })
+
+-- ---------------------------------------------------------------------------
 -- Trackpad-less window handling: vim motions
 -- ---------------------------------------------------------------------------
 local VIM = { h = "l", l = "r", k = "u", j = "d" }
