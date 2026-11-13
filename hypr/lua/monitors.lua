@@ -7,6 +7,7 @@ hl.monitor({
     mode     = "preferred",
     position = "auto",
     scale    = 1.6666666,
+    bitdepth = 10,   -- XRGB2101010 scanout; the panel is 10-bit, default is 8
 })
 
 -- Anything plugged in later.

@@ -88,7 +88,16 @@ hl.config({
         force_zero_scaling = true,
     },
 
-    render = { direct_scanout = 0 },
+    render = {
+        direct_scanout = 0,
+        -- cm_auto_hdr = 1 (the default) tells every FULLSCREEN surface that
+        -- the preferred format is BT.2020/PQ. Brave/Chrome obey and re-encode
+        -- the video as PQ, but eDP-1 never actually leaves sRGB (checked at 8
+        -- and 10 bit on 0.57.2), so Hyprland tone-maps PQ back to SDR and
+        -- fullscreen video comes out washed-out. 0 keeps fullscreen in sRGB,
+        -- pixel-identical to windowed.
+        cm_auto_hdr = 0,
+    },
 
     cursor = {
         sync_gsettings_theme      = true,
